@@ -80,10 +80,12 @@ export class Hud {
         el.className = 'bar';
         el.innerHTML = `<span class="ic">${b.label}</span><div class="track"><div class="fill"></div></div>`;
         el.fill = el.querySelector('.fill');
+        el.ic = el.querySelector('.ic');
         el.fill.style.background = b.color || '';
         this.bars.appendChild(el);
         this.barEls.set(b.id, el);
       }
+      if (el.ic.textContent !== b.label) el.ic.textContent = b.label;
       const v = Math.max(0, Math.min(1, b.value));
       const w = `${(v * 100).toFixed(1)}%`;
       if (el.fill.style.width !== w) el.fill.style.width = w;

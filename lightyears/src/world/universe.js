@@ -178,8 +178,10 @@ export function generateSystem(star, galaxySeed) {
     moon.name = `${host.name} Minor`;
     moon.index = planets.length;
     const off = rng.unitVector([0, 0, 0]);
-    const d = host.radius * (host.ring ? 4.2 : 3.2) + moon.radius * 2;
-    moon.pos = [host.pos[0] + off[0] * d, host.pos[1] + off[1] * d * 0.3, host.pos[2] + off[2] * d];
+    off[1] *= 0.3;
+    const ol = Math.hypot(off[0], off[1], off[2]);
+    const d = host.radius * (host.ring ? 4.4 : 3.4) + moon.radius * 2.2;
+    moon.pos = [host.pos[0] + (off[0] / ol) * d, host.pos[1] + (off[1] / ol) * d, host.pos[2] + (off[2] / ol) * d];
     planets.push(moon);
   }
 

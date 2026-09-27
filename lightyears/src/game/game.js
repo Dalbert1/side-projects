@@ -9,7 +9,8 @@ import { Backdrop } from '../render/backdrop.js';
 import { G, makeAtmoUniforms, copyAtmoUniforms } from '../render/shaders.js';
 import { setCloudRenderer } from '../render/clouds.js';
 import { makeStation } from '../render/stationModel.js';
-import { SpaceDust, Beam, Particles, WarpTunnel } from '../render/effects.js';
+import { SpaceDust, Beam, Particles, WarpTunnel, Weather } from '../render/effects.js';
+import { makeTool } from '../render/toolModel.js';
 import { Ship } from './ship.js';
 import { Player, EYE } from './player.js';
 import { Surface } from './surface.js';
@@ -17,6 +18,7 @@ import { Fauna } from './fauna.js';
 import { Inventory, RESOURCES } from './inventory.js';
 import { Mining } from './mining.js';
 import { Asteroids } from './asteroids.js';
+import { Traffic } from './traffic.js';
 import { Objectives } from './objectives.js';
 import { Hud } from '../ui/hud.js';
 import { Input } from '../ui/input.js';
@@ -41,8 +43,9 @@ export class Game {
   constructor() {
     this.isTouch = matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window;
     const saved = loadSave();
+    const lowMem = navigator.deviceMemory && navigator.deviceMemory <= 3;
     this.settings = Object.assign(
-      { quality: this.isTouch ? 'med' : 'high', invertY: false, sound: true, music: 0.7, sens: 1 },
+      { quality: lowMem ? 'low' : this.isTouch ? 'med' : 'high', invertY: false, sound: true, music: 0.7, sens: 1 },
       saved?.settings || {},
     );
     this.quality = QUALITY[this.settings.quality];
@@ -91,6 +94,10 @@ export class Game {
     this.particles = new Particles();
     this.nearScene.add(this.particles.points);
     this.warp = new WarpTunnel();
+    this.weather = new Weather();
+    this.nearScene.add(this.weather.points);
+    this.tool = makeTool(this.objAtmo);
+    this.toolKick = 0;
 
     this.planets = [];
     this.system = null;
@@ -185,6 +192,8 @@ export class Game {
     this.station = st;
     this.asteroids = new Asteroids(this, sys);
     this.nearScene.add(this.asteroids.group);
+    this.traffic = new Traffic(this, sys);
+    this.nearScene.add(this.traffic.group);
     this.starColor = sys.starColor;
     G.uSunColor.value.set(sys.starColor[0] * 2.7, sys.starColor[1] * 2.7, sys.starColor[2] * 2.7);
     this._updateSun(0);
@@ -201,6 +210,7 @@ export class Game {
       this.station = null;
     }
     if (this.asteroids) { this.asteroids.dispose(); this.asteroids = null; }
+    if (this.traffic) { this.traffic.dispose(); this.traffic = null; }
     this.nearest = null;
   }
 
@@ -223,6 +233,7 @@ export class Game {
     this.objectives.reset();
     const home = startStar(this.galaxySeed);
     this.loadSystem(home.id);
+    this.discovered.systems[home.id] = home.name;
     this.worldTime = 0;
     const planet = this.planets[0];
     // spawn in the morning: a spot where the sun is about 35 degrees up
@@ -300,21 +311,25 @@ export class Game {
   }
 
   _findLand(planet, dir) {
-    const tmp = dir.clone();
-    const tan = new THREE.Vector3(0, 1, 0).cross(dir).normalize();
-    for (let r = 0; r < 60; r++) {
-      for (let a = 0; a < 12; a++) {
-        const ang = (a / 12) * Math.PI * 2;
-        tmp.copy(dir).applyAxisAngle(tan, (r * 0.012) * Math.cos(ang));
-        tmp.applyAxisAngle(dir, ang * 0.5);
-        const h = planet.sampler.height(tmp.x, tmp.y, tmp.z);
-        if (h > 6 && h < 60) {
-          const slope = this._slopeAt(planet, tmp, h);
-          if (slope < 0.12) return tmp.clone().normalize();
-        }
+    // spiral outward from dir looking for gentle dry ground
+    const tan = new THREE.Vector3(0, 1, 0).cross(dir);
+    if (tan.lengthSq() < 1e-6) tan.set(1, 0, 0);
+    tan.normalize();
+    const bit = new THREE.Vector3().crossVectors(dir, tan);
+    const tmp = new THREE.Vector3();
+    let fallback = null;
+    for (let r = 0; r < 48; r++) {
+      const ang = r * 2.39996;
+      const dist = r * 0.0075;
+      tmp.copy(dir).addScaledVector(tan, Math.cos(ang) * dist).addScaledVector(bit, Math.sin(ang) * dist).normalize();
+      const h = planet.sampler.height(tmp.x, tmp.y, tmp.z);
+      if (h > 4 && h < 80) {
+        const slope = this._slopeAt(planet, tmp, h);
+        if (slope < 0.12) return tmp.clone();
+        if (!fallback && slope < 0.25) fallback = tmp.clone();
       }
     }
-    return dir;
+    return fallback || dir.clone();
   }
 
   _slopeAt(planet, dir, h) {
@@ -360,6 +375,10 @@ export class Game {
     this._setMode('ship');
     this.ship.state = 'landed';
     this.audio.sfx('door');
+    if (!this.boardedOnce) {
+      this.boardedOnce = true;
+      this.hud.toast('Welcome aboard the Golden Driller', 'good', 0);
+    }
     this.objectives.event('boarded');
     // suit systems recharge inside the cockpit
     this.inv.suit.hazard = Math.max(this.inv.suit.hazard, 100);
@@ -539,6 +558,23 @@ export class Game {
     this.audio.sfx('launch');
   }
 
+  photoMode(on) {
+    this.photo = on;
+    document.getElementById('hud').classList.toggle('hidden', on);
+    if (on) {
+      const exit = (e) => {
+        e.preventDefault();
+        window.removeEventListener('pointerdown', exit, true);
+        window.removeEventListener('keydown', exit, true);
+        this.photoMode(false);
+      };
+      setTimeout(() => {
+        window.addEventListener('pointerdown', exit, true);
+        window.addEventListener('keydown', exit, true);
+      }, 300);
+    }
+  }
+
   fade(to, secs = 0.6, white = false) {
     const f = document.getElementById('fade');
     f.classList.toggle('white', white);
@@ -691,6 +727,14 @@ export class Game {
   }
 
   tick(dt) {
+    const t0 = performance.now();
+    this._tick(dt);
+    const ms = performance.now() - t0;
+    this.cpuMs = this.cpuMs ? this.cpuMs * 0.95 + ms * 0.05 : ms;
+    if (ms > (this.cpuPeak || 0)) this.cpuPeak = ms;
+  }
+
+  _tick(dt) {
     this.frame++;
     this._perf(dt);
     G.uTime.value += dt;
@@ -721,15 +765,29 @@ export class Game {
       this.worldTime += dt;
       if (this.mode === 'warp') this._updateWarp(dt);
       else if (this.mode === 'ship') this._updateShipMode(dt, pressed);
-      else if (this.mode === 'foot') this._updateFootMode(dt, pressed);
+      else if (this.mode === 'foot') {
+        const tf0 = performance.now();
+        this._updateFootMode(dt, pressed);
+        if (this.prof) this.prof.foot = (this.prof.foot || 0) * 0.95 + (performance.now() - tf0) * 0.05;
+      }
     } else {
       input.consumeLook();
     }
+    const tw0 = performance.now();
     this._updateWorld(paused ? 0 : dt);
+    const tw1 = performance.now();
     this._updateHud(dt);
     this.audio.update(dt);
     this.objectives.update(dt);
+    const tw2 = performance.now();
     this._render();
+    const tw3 = performance.now();
+    if (this.prof) {
+      const p = this.prof;
+      p.world = p.world * 0.95 + (tw1 - tw0) * 0.05;
+      p.hud = p.hud * 0.95 + (tw2 - tw1) * 0.05;
+      p.render = p.render * 0.95 + (tw3 - tw2) * 0.05;
+    }
 
     this.saveTimer += dt;
     if (this.saveTimer > 25 && !paused && this.mode !== 'warp') {
@@ -776,7 +834,7 @@ export class Game {
       const gap = this.nearestDist - atmoR;
       const toP = _v.copy(ship.pos).sub(planet.pos).divideScalar(this.nearestDist);
       const closing = -ship.vel.dot(toP);
-      if (gap < 700 || (closing > 0 && gap / closing < 1.4)) pulseOk = false;
+      if (gap < 300 || (closing > 0 && gap / closing < 1.4)) pulseOk = false;
       if (st) {
         const toS = _v2.copy(ship.pos).sub(st.pos).divideScalar(stDist);
         const cs = -ship.vel.dot(toS);
@@ -820,7 +878,15 @@ export class Game {
       input.consumeLook();
     }
     this.hud.setPulse(ship.state === 'flying' && !ship.inAtmo, ship.pulseOn);
+    const wasIn = ship.inAtmo;
     ship.update(dt, input);
+    if (!wasIn && ship.inAtmo && ship.state === 'flying' && ship.speed > 200) {
+      ship.shake = Math.max(ship.shake, 0.8);
+      this.hud.setVignette('entry');
+      clearTimeout(this._vigT);
+      this._vigT = setTimeout(() => this.hud.setVignette(null), 1700);
+      this.audio.sfx('entry');
+    }
     this._chaseCamera(dt);
   }
 
@@ -885,6 +951,11 @@ export class Game {
 
     if (pressed.has('scan')) this.mining.scan();
     this.mining.updateFoot(dt, input.held.has('primary'));
+    if (player.jetting && this.frame % 2 === 0) {
+      const down = _v.copy(player.up).negate();
+      const at = _v2.copy(player.pos).add(planet.pos).addScaledVector(player.up, 0.4).addScaledVector(player.forward, -0.35);
+      this.particles.burst(at, [0.5, 0.75, 1.0], 2, 3, 0.35, 0.5, down);
+    }
 
     // suit systems
     const inv = this.inv;
@@ -1013,7 +1084,7 @@ export class Game {
       night = 1 - THREE.MathUtils.smoothstep(up.dot(G.uSunDir.value), -0.2, 0.08);
     }
     this.skyBrightness = skyB;
-    G.uTorch.value = this.mode === 'foot' ? night * 0.9 : 0;
+    G.uTorch.value = this.mode === 'foot' ? night * 0.9 : this.mode === 'ship' && this.focusAlt < 800 ? night * 0.55 : 0;
     this.backdrop.update(cam, this.pixelRatio, skyB);
 
     // effects
@@ -1021,7 +1092,13 @@ export class Game {
     this.dust.update(cam, vel, this.mode === 'ship' && (!nearest || !this.ship.inAtmo) ? 1 : 0.0);
     this.beams.update(dt);
     this.particles.update(dt, cam);
+    if (nearest) {
+      const up = _v.copy(cam.position).sub(nearest.pos).normalize();
+      const wActive = (this.mode === 'foot' || this.mode === 'ship') && this.focusAlt < 260;
+      this.weather.update(dt, cam, nearest, up, up.dot(G.uSunDir.value), wActive);
+    }
     this.asteroids?.update(dt, cam.position, this.mode === 'ship');
+    this.traffic?.update(dt, cam.position);
   }
 
   _placeCrashCrystals(planet) {
@@ -1115,7 +1192,40 @@ export class Game {
     cam.near = near;
     cam.far = far;
     cam.updateProjectionMatrix();
+    this.beams.build(cam);
     r.render(this.nearScene, cam);
+    if (this.mode === 'foot' && !this.menus.isOpen) {
+      this._placeTool();
+      r.clearDepth();
+      cam.near = 0.01;
+      cam.far = 10;
+      cam.updateProjectionMatrix();
+      r.render(this.tool.scene, cam);
+    }
+  }
+
+  _placeTool() {
+    const cam = this.camera;
+    const t = this.tool.mesh;
+    const p = this.player;
+    const firing = this.mining.firing;
+    this.toolKick += ((firing ? 1 : 0) - this.toolKick) * 0.2;
+    const bob = Math.sin(p.bob) * 0.012;
+    const sway = Math.cos(p.bob * 0.5) * 0.01;
+    const jitter = firing ? (Math.random() - 0.5) * 0.006 : 0;
+    const portrait = this.height > this.width;
+    _v.set((portrait ? 0.15 : 0.23) + sway + jitter, -0.19 + bob + jitter - (portrait ? 0.02 : 0), -0.5 + this.toolKick * 0.025);
+    _v.applyQuaternion(cam.quaternion);
+    t.position.copy(cam.position).add(_v);
+    t.quaternion.copy(cam.quaternion);
+    _q.setFromEuler(new THREE.Euler(0.04 - this.toolKick * 0.03, 0.08, 0.02));
+    t.quaternion.multiply(_q);
+    t.updateMatrixWorld();
+  }
+
+  toolMuzzle(out) {
+    this._placeTool();
+    return out.copy(this.tool.muzzle).applyMatrix4(this.tool.mesh.matrixWorld);
   }
 
   // ---------------------------------------------------------------------------

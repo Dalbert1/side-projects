@@ -120,6 +120,7 @@ export class Beam {
         }`,
       transparent: true,
       depthWrite: false,
+      side: THREE.DoubleSide,
       blending: THREE.AdditiveBlending,
     });
     this.mesh = new THREE.Mesh(geo, this.mat);
@@ -171,8 +172,8 @@ export class Beam {
     };
     if (this.mining) quad(this.mining.start, this.mining.end, 0.07, this.mining.color);
     for (const b of this.bolts) {
-      const tail = _v2.copy(b.pos).addScaledVector(b.dir, -Math.min(24, b.speed * 0.03));
-      quad(tail.clone(), b.pos, 0.55, b.color);
+      const tail = _v2.copy(b.pos).addScaledVector(b.dir, -Math.min(40, b.speed * 0.045));
+      quad(tail.clone(), b.pos, 0.95, b.color);
     }
     for (let i = n * 12; i < this.maxQuads * 12; i++) this.pos[i] = 0;
     const g = this.mesh.geometry;
@@ -356,5 +357,114 @@ export class WarpTunnel {
 
   stop() {
     this.mat.uniforms.uI.value = 0;
+  }
+}
+
+// Weather and ambient motes near the ground: snow, embers, spores, dust, pollen, fireflies.
+const WEATHER = {
+  frozen: { color: [0.95, 0.97, 1.0], size: 0.16, fall: 2.6, wind: 1.6, additive: false, alpha: 0.85, count: 700 },
+  volcanic: { color: [1.0, 0.45, 0.12], size: 0.1, fall: -1.2, wind: 1.2, additive: true, alpha: 1.0, count: 260 },
+  toxic: { color: [0.75, 1.0, 0.3], size: 0.12, fall: -0.25, wind: 0.6, additive: true, alpha: 0.9, count: 260 },
+  desert: { color: [0.9, 0.72, 0.5], size: 0.07, fall: 0.3, wind: 7, additive: false, alpha: 0.6, count: 500 },
+  lush: { color: [1.0, 0.95, 0.6], size: 0.06, fall: 0.1, wind: 0.5, additive: true, alpha: 0.6, count: 160 },
+  ocean: { color: [1.0, 0.95, 0.6], size: 0.06, fall: 0.1, wind: 0.5, additive: true, alpha: 0.5, count: 120 },
+  exotic: { color: [0.8, 0.6, 1.0], size: 0.1, fall: -0.3, wind: 0.8, additive: true, alpha: 0.9, count: 220 },
+};
+
+export class Weather {
+  constructor() {
+    this.box = 60;
+    const max = 700;
+    const pos = new Float32Array(max * 3);
+    const seed = new Float32Array(max);
+    for (let i = 0; i < max; i++) {
+      pos[i * 3] = Math.random() * this.box;
+      pos[i * 3 + 1] = Math.random() * this.box;
+      pos[i * 3 + 2] = Math.random() * this.box;
+      seed[i] = Math.random();
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    geo.setAttribute('aSeed', new THREE.BufferAttribute(seed, 1));
+    this.uniforms = {
+      uOffset: { value: new THREE.Vector3() },
+      uBox: { value: this.box },
+      uColor: { value: new THREE.Vector3(1, 1, 1) },
+      uSize: { value: 0.1 },
+      uScale: { value: 400 },
+      uAlpha: { value: 0 },
+      uFireflies: { value: 0 },
+      uTime: { value: 0 },
+    };
+    const vert = /* glsl */ `
+      attribute float aSeed;
+      uniform vec3 uOffset;
+      uniform float uBox;
+      uniform float uSize;
+      uniform float uScale;
+      uniform float uAlpha;
+      uniform float uFireflies;
+      uniform float uTime;
+      varying float vA;
+      void main() {
+        vec3 p = mod(position - uOffset, uBox) - uBox * 0.5;
+        // fireflies wander on little loops
+        p += uFireflies * vec3(sin(uTime * 0.7 + aSeed * 40.0), sin(uTime * 0.9 + aSeed * 23.0) * 0.6, cos(uTime * 0.6 + aSeed * 31.0)) * 1.5;
+        vec4 mv = vec4(mat3(viewMatrix) * p, 1.0);
+        gl_Position = projectionMatrix * mv;
+        float d = length(p) / (uBox * 0.5);
+        float blink = mix(1.0, smoothstep(0.2, 1.0, sin(uTime * 2.0 + aSeed * 60.0)), uFireflies);
+        vA = uAlpha * (1.0 - smoothstep(0.5, 1.0, d)) * blink;
+        gl_PointSize = uSize * uScale / max(0.2, -mv.z);
+      }`;
+    const frag = /* glsl */ `
+      uniform vec3 uColor;
+      varying float vA;
+      void main() {
+        vec2 c = gl_PointCoord - 0.5;
+        float a = smoothstep(0.5, 0.15, length(c)) * vA;
+        if (a < 0.01) discard;
+        gl_FragColor = vec4(uColor, a);
+        #include <tonemapping_fragment>
+        #include <colorspace_fragment>
+      }`;
+    this.matAlpha = new THREE.ShaderMaterial({ uniforms: this.uniforms, vertexShader: vert, fragmentShader: frag, transparent: true, depthWrite: false });
+    this.matAdd = new THREE.ShaderMaterial({ uniforms: this.uniforms, vertexShader: vert, fragmentShader: frag, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
+    this.points = new THREE.Points(geo, this.matAlpha);
+    this.points.frustumCulled = false;
+    this.points.renderOrder = 16;
+    this.drift = new THREE.Vector3();
+    this.kind = null;
+    this.alpha = 0;
+  }
+
+  update(dt, camera, planet, up, sunUp, active) {
+    const u = this.uniforms;
+    u.uTime.value += dt;
+    let w = planet && planet.params.atmo ? WEATHER[planet.params.biome] : null;
+    let fireflies = 0;
+    if (w && (planet.params.biome === 'lush' || planet.params.biome === 'ocean')) {
+      // pollen by day, fireflies at night
+      fireflies = sunUp < -0.05 ? 1 : 0;
+      w = fireflies ? { ...w, color: [0.7, 1.0, 0.35], size: 0.16, count: 180, alpha: 1 } : w;
+    }
+    const target = w && active ? w.alpha : 0;
+    this.alpha += (target - this.alpha) * Math.min(1, dt * 1.5);
+    this.points.visible = this.alpha > 0.01;
+    if (!this.points.visible || !w) return;
+    this.points.material = w.additive ? this.matAdd : this.matAlpha;
+    this.points.geometry.setDrawRange(0, w.count);
+    u.uColor.value.set(...w.color.map((c) => Math.pow(c, 2.2)));
+    u.uSize.value = w.size;
+    u.uFireflies.value = fireflies;
+    u.uAlpha.value = this.alpha;
+    u.uScale.value = window.innerHeight / (2 * Math.tan((camera.fov * Math.PI) / 360));
+    // fall along -up with a sideways wind, in camera relative coordinates
+    const side = _v.set(up.y, -up.x, 0.3).normalize();
+    this.drift.addScaledVector(up, -w.fall * dt).addScaledVector(side, w.wind * dt);
+    const b = this.box;
+    const mod = (x) => ((x % b) + b) % b;
+    const c = camera.position;
+    u.uOffset.value.set(mod(c.x - this.drift.x), mod(c.y - this.drift.y), mod(c.z - this.drift.z));
   }
 }

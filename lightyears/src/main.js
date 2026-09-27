@@ -28,7 +28,10 @@ async function boot() {
   const { startStar } = await import('./world/universe.js');
   const game = new Game();
   window.__game = game;
-  if (params.has('nodynres')) game.noDynRes = true;
+  if (params.has('nodynres')) {
+    game.noDynRes = true;
+    window.__faunaMod = await import('./game/fauna.js');
+  }
 
   const saved = loadSave();
   const canContinue = hasGame(saved);
@@ -48,8 +51,15 @@ async function boot() {
     ? 'Left thumb moves or steers. Drag the right side to look. Best in landscape with sound on.'
     : 'WASD and mouse. Click to capture the mouse, Esc for the menu. Sound on recommended.';
 
+  // on Android, going full screen hides the browser bars; iOS ignores this
+  const goFull = () => {
+    if (!game.isTouch || document.fullscreenElement || !document.fullscreenEnabled) return;
+    try { document.documentElement.requestFullscreen({ navigationUI: 'hide' }).catch(() => {}); } catch { /* not supported */ }
+  };
+
   let confirmNew = false;
   cont.addEventListener('click', () => {
+    goFull();
     game.audio.start();
     game.continueGame();
   });
@@ -60,6 +70,7 @@ async function boot() {
       setTimeout(() => { confirmNew = false; fresh.textContent = 'Begin a New Journey'; }, 3500);
       return;
     }
+    goFull();
     game.audio.start();
     game.newGame();
   });

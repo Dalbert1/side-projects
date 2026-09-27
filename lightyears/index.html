@@ -9,6 +9,8 @@
 <meta name="description" content="918 Lightyears: fly a gold starship across an endless procedural galaxy, land on alien worlds, and journey to the Center of the Universe.">
 <title>918 Lightyears</title>
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="manifest" href="manifest.webmanifest">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Syncopate:wght@700&display=swap" rel="stylesheet">
@@ -54,11 +56,12 @@
 
     <div id="throttle" class="hidden"><div id="throttle-fill"></div><span>THR</span></div>
 
+    <div id="ctx" class="ctx-row">
+      <button class="act ctx hidden" id="btn-ctx2" data-press="interact2"><span id="btn-ctx2-label">Exit</span></button>
+      <button class="act ctx hidden" id="btn-ctx" data-press="interact"><span id="btn-ctx-label">Board</span></button>
+    </div>
+
     <div id="actions">
-      <div class="ctx-row">
-        <button class="act ctx hidden" id="btn-ctx2" data-press="interact2"><span id="btn-ctx2-label">Exit</span></button>
-        <button class="act ctx hidden" id="btn-ctx" data-press="interact"><span id="btn-ctx-label">Board</span></button>
-      </div>
       <div class="act-grid">
         <button class="act foot" data-press="scan"><b>Scan</b></button>
         <button class="act foot" data-hold="jump"><b>Jet</b></button>

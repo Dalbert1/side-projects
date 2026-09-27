@@ -221,7 +221,7 @@ export class Surface {
         this.dirty = true;
       }
     }
-    if (this.dirty || this.lastRebuildPos.distanceToSquared(playerLocal) > 144) {
+    if (this.dirty || this.lastRebuildPos.distanceToSquared(playerLocal) > 400) {
       this._rebuild(playerLocal);
     }
   }
@@ -286,12 +286,24 @@ export class Surface {
     });
   }
 
-  *nearby(p, radius) {
+  // Objects within radius of p. Only visits the grid cells the query box touches.
+  nearby(p, radius, out = []) {
+    out.length = 0;
     const r2 = radius * radius;
-    for (const c of this.cells.values()) {
-      for (const o of c.objs) if (!o.dead && o.slot !== -1 && o.pos.distanceToSquared(p) < r2) yield o;
+    const x0 = Math.floor((p.x - radius) / S), x1 = Math.floor((p.x + radius) / S);
+    const y0 = Math.floor((p.y - radius) / S), y1 = Math.floor((p.y + radius) / S);
+    const z0 = Math.floor((p.z - radius) / S), z1 = Math.floor((p.z + radius) / S);
+    for (let ix = x0; ix <= x1; ix++) {
+      for (let iy = y0; iy <= y1; iy++) {
+        for (let iz = z0; iz <= z1; iz++) {
+          const c = this.cells.get(`${ix},${iy},${iz}`);
+          if (!c) continue;
+          for (const o of c.objs) if (!o.dead && o.slot !== -1 && o.pos.distanceToSquared(p) < r2) out.push(o);
+        }
+      }
     }
-    for (const o of this.extras) if (!o.dead && o.pos.distanceToSquared(p) < r2) yield o;
+    for (const o of this.extras) if (!o.dead && o.pos.distanceToSquared(p) < r2) out.push(o);
+    return out;
   }
 
   info(o) {
@@ -312,7 +324,7 @@ export class Surface {
 
   raycast(origin, dir, maxDist) {
     let best = null, bestT = maxDist;
-    for (const o of this.nearby(origin, maxDist + 12)) {
+    for (const o of this.nearby(origin, maxDist + 12, this._rayList || (this._rayList = []))) {
       if (!this.kinds[o.k].info.res) continue;
       const r = this.hitSphere(o, _v);
       const ox = origin.x - _v.x, oy = origin.y - _v.y, oz = origin.z - _v.z;
@@ -346,7 +358,7 @@ export class Surface {
   }
 
   collidePlayer(pos, radius) {
-    for (const o of this.nearby(pos, 6)) {
+    for (const o of this.nearby(pos, 6, this._colList || (this._colList = []))) {
       const info = this.kinds[o.k].info;
       if (!info.collide) continue;
       const cr = info.collide * o.scale + radius;

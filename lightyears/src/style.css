@@ -77,6 +77,7 @@ button { font-family: inherit; color: inherit; }
 }
 #vignette.hurt { box-shadow: inset 0 0 90px 30px rgba(255, 50, 40, 0.45); }
 #vignette.hazard { box-shadow: inset 0 0 120px 20px rgba(255, 170, 60, 0.28); }
+#vignette.entry { box-shadow: inset 0 0 160px 60px rgba(255, 110, 30, 0.55); }
 
 #speedlines {
   position: absolute; inset: -10%;
@@ -226,7 +227,16 @@ button { font-family: inherit; color: inherit; }
   align-items: flex-end;
   gap: 12px;
 }
-.ctx-row { display: flex; gap: 8px; justify-content: flex-end; }
+#ctx {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: calc(214px + var(--safe-b));
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  white-space: nowrap;
+}
 .act-grid {
   display: grid;
   grid-template-columns: repeat(2, auto);
@@ -303,6 +313,7 @@ button { font-family: inherit; color: inherit; }
   width: 92vw;
 }
 .toast {
+  max-width: min(92vw, 380px);
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -340,7 +351,7 @@ button { font-family: inherit; color: inherit; }
   position: absolute; inset: 0;
   z-index: 20;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
   padding: calc(16px + var(--safe-t)) calc(16px + var(--safe-r)) calc(16px + var(--safe-b)) calc(16px + var(--safe-l));
   overflow-y: auto;
@@ -349,7 +360,7 @@ button { font-family: inherit; color: inherit; }
 #title {
   background: radial-gradient(ellipse at 50% 60%, rgba(2,3,10,0.1), rgba(2,3,10,0.72));
 }
-.title-wrap { text-align: center; max-width: 520px; width: 100%; }
+.title-wrap { text-align: center; max-width: 520px; width: 100%; margin: auto; }
 .title-kicker { font-size: 13px; letter-spacing: 4px; text-transform: uppercase; color: var(--amber); }
 .logo {
   font-family: 'Syncopate', sans-serif;
@@ -387,6 +398,7 @@ button { font-family: inherit; color: inherit; }
 
 #panel { background: rgba(2, 3, 10, 0.55); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); }
 .panel-card {
+  margin: auto;
   width: min(560px, 100%);
   max-height: 100%;
   overflow-y: auto;
@@ -480,6 +492,10 @@ button { font-family: inherit; color: inherit; }
 @keyframes toastIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
 @keyframes pulseBorder { 0%, 100% { box-shadow: 0 0 0 0 rgba(255,181,71,0.0); } 50% { box-shadow: 0 0 0 6px rgba(255,181,71,0.18); } }
 
+@media (orientation: landscape) {
+  #ctx { bottom: calc(84px + var(--safe-b)); }
+}
+
 /* landscape phones: tighter vertical layout */
 @media (orientation: landscape) and (max-height: 500px) {
   #location { top: calc(8px + var(--safe-t)); }
@@ -489,13 +505,17 @@ button { font-family: inherit; color: inherit; }
   #throttle { top: 16%; height: 40%; }
   #hud-tl { max-width: 200px; }
   #objective { font-size: 13px; }
-  .logo { font-size: 38px; margin: 6px 0; }
-  .title-buttons { margin: 14px auto 8px; }
+  .logo { font-size: 34px; margin: 4px 0 6px; }
+  .title-tag { font-size: 14px; max-width: 520px; }
+  .title-buttons { margin: 12px auto 6px; grid-template-columns: 1fr 1fr; max-width: 560px; }
+  .title-buttons .hidden + .primary-btn, .title-buttons .primary-btn:only-child { grid-column: 1 / -1; }
+  .title-controls { font-size: 12px; }
+  .back-link { margin-top: 8px; }
 }
 
 @media (pointer: fine) {
   .act:not(.ctx), #throttle, #stick { display: none !important; }
-  #actions { bottom: calc(80px + var(--safe-b)); right: 50%; transform: translateX(50%); }
+  #ctx { bottom: calc(96px + var(--safe-b)); }
 }
 .keyhint { font-size: 11px; color: var(--dim); margin-left: 8px; border: 1px solid var(--line); border-radius: 4px; padding: 1px 5px; }
 #keys { position: absolute; left: calc(12px + var(--safe-l)); bottom: calc(12px + var(--safe-b)); font-size: 12px; color: var(--faint); line-height: 1.6; font-weight: 600; pointer-events: none; }

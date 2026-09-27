@@ -275,12 +275,12 @@ export function generatePlanet(seed, opts = {}) {
     }
     case 'volcanic': {
       const hue = rng.range(0, 0.08);
-      pal.groundA = hsl(hue, rng.range(0.08, 0.2), rng.range(0.13, 0.19));
-      pal.groundB = hsl(hue, rng.range(0.1, 0.25), rng.range(0.08, 0.13));
-      pal.sand = hsl(0.05, 0.25, 0.2);
-      pal.rock = hsl(0.02, 0.2, 0.1);
-      pal.highland = hsl(0.06, 0.1, 0.3);
-      pal.snow = hsl(0.1, 0.05, 0.55);
+      pal.groundA = hsl(hue, rng.range(0.1, 0.22), rng.range(0.24, 0.3));
+      pal.groundB = hsl(hue, rng.range(0.12, 0.26), rng.range(0.16, 0.21));
+      pal.sand = hsl(0.05, 0.25, 0.28);
+      pal.rock = hsl(0.02, 0.22, 0.17);
+      pal.highland = hsl(0.06, 0.08, 0.46);
+      pal.snow = hsl(0.1, 0.05, 0.62);
       terrain.mountAmp *= 1.2;
       terrain.mountSharp = 2.8;
       terrain.snowLine = rng.range(160, 220);

@@ -89,7 +89,7 @@ export class Mining {
     // beam from the tool (low right of view) to the hit point or into the distance
     const up = player.up;
     const right = _v2.crossVectors(player.lookWorld, up).normalize();
-    const muzzle = player.eyeWorld.clone().addScaledVector(right, 0.32).addScaledVector(up, -0.28).addScaledVector(player.lookWorld, 0.7);
+    const muzzle = g.toolMuzzle(new THREE.Vector3());
     let end;
     if (hit) end = player.eyeWorld.clone().addScaledVector(player.lookWorld, hit.t);
     else {
@@ -150,7 +150,7 @@ export class Mining {
     g.scanPulse?.(player.eyeWorld);
     this.scanned = [];
     if (g.surface) {
-      for (const o of g.surface.nearby(player.pos, 110)) {
+      for (const o of g.surface.nearby(player.pos, 110, [])) {
         const info = g.surface.info(o);
         if (info.cat === 'mineral' || info.cat === 'plant' || g.surface.kindOf(o) === 'boulder') this.scanned.push(o);
       }
@@ -169,7 +169,7 @@ export class Mining {
     const found = [];
     if (g.surface) {
       const kinds = new Set();
-      for (const o of g.surface.nearby(player.pos, 70)) {
+      for (const o of g.surface.nearby(player.pos, 70, [])) {
         const info = g.surface.info(o);
         if (info.cat === 'tree' || info.cat === 'bush' || info.cat === 'plant') kinds.add(g.surface.kindOf(o));
       }
@@ -225,7 +225,7 @@ export class Mining {
     this.shipSide *= -1;
     const start = ship.pos.clone().addScaledVector(ship.left, 1.35 * this.shipSide).addScaledVector(ship.forward, 4).addScaledVector(ship.up, -0.2);
     const dir = ship.forward.clone();
-    const speed = 900 + ship.speed;
+    const speed = 700 + ship.speed;
     g.beams.fire(start, dir, speed, [1.0, 0.45, 0.2], 1.4);
     g.audio.sfx('shoot');
     g.asteroids?.registerBolt(g.beams.bolts[g.beams.bolts.length - 1]);

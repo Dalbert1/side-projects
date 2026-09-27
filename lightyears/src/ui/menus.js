@@ -5,6 +5,7 @@ import { BIOMES, HAZARD_LABEL } from '../world/planetgen.js';
 import { hashInts } from '../core/rng.js';
 
 const fmt = (n) => Math.round(n).toLocaleString();
+const plural = (n, word) => `${fmt(n)} ${word}${Math.round(n) === 1 ? '' : 's'}`;
 
 export class Menus {
   constructor(game) {
@@ -111,7 +112,7 @@ export class Menus {
     }
     const disc = g.discovered;
     return `
-      <div class="row" style="border:none;padding-top:0"><div class="info">Units<small>Sell resources at a station</small></div><div class="units">${fmt(inv.units)} u</div></div>
+      <div class="row" style="border:none;padding-top:0"><div class="info">Units<small>Your ship: the Golden Driller</small></div><div class="units">${fmt(inv.units)} u</div></div>
       <div class="row"><div class="info">Warp Cells<small>One per hyperspace jump</small></div><div class="units" style="color:var(--cyan)">${inv.warpCells}</div></div>
       <div class="section"><h3>Resources</h3>${this._resGrid()}</div>
       <div class="section"><h3>Refuel and recharge</h3>${rows}</div>
@@ -121,7 +122,7 @@ export class Menus {
       ${where}
       <div class="section"><h3>Journey</h3><div class="muted">
         ${star ? `${star.name}, ${fmt(distanceToCore(star))} ly from the Center of the Universe.<br>` : ''}
-        ${Object.keys(disc.systems).length} systems, ${Object.keys(disc.planets).length} planets, ${Object.keys(disc.species).length} species discovered. ${g.jumps} jumps.
+        ${plural(Object.keys(disc.systems).length, 'system')}, ${plural(Object.keys(disc.planets).length, 'planet')}, ${fmt(Object.keys(disc.species).length)} species discovered. ${plural(g.jumps, 'jump')}.
       </div></div>`;
   }
 
@@ -174,6 +175,7 @@ export class Menus {
       <button class="primary-btn" data-act="resume">Resume</button>
       <button class="ghost-btn" data-act="settings">Settings</button>
       <button class="ghost-btn" data-act="help">How to play</button>
+      <button class="ghost-btn" data-act="photo">Photo mode (tap to exit)</button>
       <button class="ghost-btn" data-act="title">Save and quit to title</button>
     </div>
     <div class="muted" style="margin-top:14px;text-align:center">Progress saves on this device automatically.</div>`;
@@ -209,7 +211,7 @@ export class Menus {
   _finale() {
     return `<div class="muted" style="display:grid;gap:12px;font-size:16px">
       <div>Back home in Tulsa there is a little circle of bricks downtown. Stand in the middle and speak, and your own voice comes back to you, loud and strange, while people a step away hear nothing at all.</div>
-      <div>Out here it works the same way. ${fmt(this.game.jumps)} jumps, ${fmt(Object.keys(this.game.discovered.planets).length)} worlds, and the whole galaxy echoes back at you.</div>
+      <div>Out here it works the same way. ${plural(this.game.jumps, 'jump')}, ${plural(Object.keys(this.game.discovered.planets).length, 'world')}, and the whole galaxy echoes back at you.</div>
       <div style="color:var(--ink)">You found the Center of the Universe.</div>
     </div>
     <div class="section" style="display:grid;gap:8px">
@@ -291,6 +293,10 @@ export class Menus {
       case 'title':
         this.close();
         g.toTitle();
+        return;
+      case 'photo':
+        this.close();
+        g.photoMode(true);
         return;
       case 'quality':
         if (g.settings.quality !== arg) {

@@ -280,6 +280,9 @@ export class Audio {
     const now = ctx.currentTime;
     const sysSeed = this.game.star ? this.game.star.seed : 918;
     if (sysSeed !== this.scaleSeed) this._setScale(sysSeed);
+    // after a stall (tab in the background) do not try to catch up on missed chords
+    if (this.nextChord < now - 1) this.nextChord = now + 0.2;
+    if (this.nextPluck < now - 1) this.nextPluck = now + 1;
     if (now > this.nextChord - 0.1) {
       const dur = 9;
       const deg = this.progression[this.chordIndex % this.progression.length];
@@ -471,6 +474,10 @@ export class Audio {
       case 'hit':
         this._sweep(160, 50, 0.3, 0.3, 'sine');
         this._whoosh(0.3, 0.2, 600, 150);
+        break;
+      case 'entry':
+        this._whoosh(2.2, 0.35, 300, 2600, 0.5);
+        this._sweep(40, 90, 1.8, 0.25, 'sawtooth');
         break;
       case 'overheat':
         this._whoosh(0.9, 0.2, 3000, 800, 2);

@@ -6,6 +6,9 @@ import * as THREE from 'three';
 const _v = new THREE.Vector3();
 const _v2 = new THREE.Vector3();
 const _right = new THREE.Vector3();
+const _tan = new THREE.Vector3();
+const _f = new THREE.Vector3();
+const _nz = new THREE.Vector3();
 const _m = new THREE.Matrix4();
 
 export const EYE = 1.7;
@@ -99,7 +102,7 @@ export class Player {
 
     // split velocity into vertical and tangent parts
     const vUp = this.vel.dot(up);
-    const tangent = this.vel.clone().addScaledVector(up, -vUp);
+    const tangent = _tan.copy(this.vel).addScaledVector(up, -vUp);
     const control = this.grounded || this.swimming ? 14 : 3.2;
     tangent.lerp(want, 1 - Math.exp(-dt * control));
 
@@ -160,11 +163,11 @@ export class Player {
     const bobY = Math.sin(this.bob) * 0.05;
     this.eyeWorld.copy(this.pos).addScaledVector(up, EYE + bobY).add(this.planet.pos);
     _right.crossVectors(this.forward, up).normalize();
-    const f = _v.copy(this.forward).multiplyScalar(Math.cos(this.pitch)).addScaledVector(up, Math.sin(this.pitch));
+    const f = _f.copy(this.forward).multiplyScalar(Math.cos(this.pitch)).addScaledVector(up, Math.sin(this.pitch));
     this.lookWorld.copy(f);
     const camUp = _v2.crossVectors(_right, f).normalize();
     // camera looks down -Z: basis x = right, y = up, z = -forward
-    _m.makeBasis(_right, camUp, f.clone().negate());
+    _m.makeBasis(_right, camUp, _nz.copy(f).negate());
     this.camQuat.setFromRotationMatrix(_m);
   }
 }

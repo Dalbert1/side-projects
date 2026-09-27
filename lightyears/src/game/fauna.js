@@ -11,10 +11,13 @@ import { floorAt } from './player.js';
 
 const _v = new THREE.Vector3();
 const _v2 = new THREE.Vector3();
+const _d = new THREE.Vector3();
+const _n = new THREE.Vector3();
+const _x = new THREE.Vector3();
 const _m = new THREE.Matrix4();
 const _q = new THREE.Quaternion();
 
-function makeSpecies(planet, index) {
+export function makeSpecies(planet, index) {
   const seed = hashInts(planet.params.seed, 404, index);
   const rng = new Rng(seed);
   const biome = planet.params.biome;
@@ -261,7 +264,7 @@ export class Fauna {
       if (sp.type === 'flyer') {
         c.heading.applyAxisAngle(up, c.flyTurn * dt).addScaledVector(up, -c.heading.dot(up)).normalize();
         c.pos.addScaledVector(c.heading, sp.speed * 5 * dt);
-        const d = c.pos.clone().normalize();
+        const d = _d.copy(c.pos).normalize();
         const ground = p.R + Math.max(0, p.sampler.height(d.x, d.y, d.z));
         c.pos.copy(d).multiplyScalar(ground + c.flyAlt + Math.sin(c.phase * 0.3) * 3);
         c.phase += dt * 7;
@@ -295,7 +298,7 @@ export class Fauna {
         c.heading.addScaledVector(up, -c.heading.dot(up)).normalize();
         if (c.speed > 0.05) {
           const next = _v2.copy(c.pos).addScaledVector(c.heading, c.speed * dt);
-          const nd = next.clone().normalize();
+          const nd = _n.copy(next).normalize();
           if (!this._groundOk(nd)) {
             c.heading.negate();
             c.timer = rng.range(1, 3);
@@ -303,7 +306,7 @@ export class Fauna {
             c.pos.copy(next);
           }
         }
-        const d = c.pos.clone().normalize();
+        const d = _d.copy(c.pos).normalize();
         const ground = p.R + p.sampler.height(d.x, d.y, d.z);
         c.phase += dt * c.speed * (2.6 / Math.sqrt(sp.size));
         let lift = 0;
@@ -320,9 +323,8 @@ export class Fauna {
 
       // orient: +Y up, +Z heading
       const z = c.heading;
-      const x = _v2.crossVectors(up, z).normalize();
-      const y = up;
-      _m.makeBasis(x, y, z.clone().copy(z));
+      const x = _x.crossVectors(up, z).normalize();
+      _m.makeBasis(x, up, z);
       _q.setFromRotationMatrix(_m);
       c.group.quaternion.slerp(_q, Math.min(1, dt * 6));
       c.group.position.copy(c.pos);
