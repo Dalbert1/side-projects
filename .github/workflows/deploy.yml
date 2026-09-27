@@ -51,6 +51,15 @@ jobs:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
 
+      # ── Build 918 Lightyears (Three.js space game) ──
+      - name: Install 918 Lightyears deps
+        run: npm ci
+        working-directory: lightyears
+
+      - name: Build 918 Lightyears
+        run: npm run build
+        working-directory: lightyears
+
       # ── Dugout Counter and the mini games are single HTML files, no build needed ──
 
       # ── Not deployed (source kept in repo, intentionally left off GitHub Pages):
@@ -63,6 +72,7 @@ jobs:
           mkdir -p _site/games
           cp -r osrs-inv-tracker/dist _site/osrs-inv-tracker
           cp -r recipebox/dist _site/recipebox
+          cp -r lightyears/dist _site/lightyears
           mkdir -p _site/dugoutcounter
           cp dugoutcounter/index.html _site/dugoutcounter/index.html
           cp games/ninja.html games/cowboy.html games/snake.html _site/games/

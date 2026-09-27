@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#05060d">
+<meta name="description" content="918 Lightyears: fly a gold starship across an endless procedural galaxy, land on alien worlds, and journey to the Center of the Universe.">
+<title>918 Lightyears</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Syncopate:wght@700&display=swap" rel="stylesheet">
+</head>
+<body>
+<div id="app">
+  <div id="canvas-host"></div>
+  <div id="touch"></div>
+  <div id="stick"><div id="stick-knob"></div></div>
+
+  <div id="hud" class="hidden">
+    <div id="markers"></div>
+    <div id="speedlines"></div>
+    <div id="vignette"></div>
+
+    <div id="hud-tl">
+      <div id="bars"></div>
+      <div id="objective" class="hidden"><div class="obj-label">Current objective</div><div id="objective-text"></div></div>
+    </div>
+
+    <div id="hud-tr">
+      <button class="icon-btn" data-press="inventory" data-always="1" aria-label="Inventory">
+        <svg viewBox="0 0 24 24"><path d="M6 8h12l-1 12H7L6 8zm3 0V6a3 3 0 0 1 6 0v2" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+      </button>
+      <button class="icon-btn" data-press="map" data-always="1" aria-label="Galaxy map">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="2.5" fill="currentColor"/><path d="M12 3c5 0 9 4 9 9M12 21c-5 0-9-4-9-9M5 7c3-3 8-3 11 0M19 17c-3 3-8 3-11 0" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>
+      </button>
+      <button class="icon-btn" data-press="menu" data-always="1" aria-label="Menu">
+        <svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2.2"/></svg>
+      </button>
+    </div>
+
+    <div id="location"><div id="loc-name"></div><div id="loc-sub"></div></div>
+
+    <div id="crosshair"></div>
+    <div id="target" class="hidden"><div id="target-name"></div><div class="tbar"><div id="target-fill"></div></div></div>
+    <div id="heat" class="hidden"><div id="heat-fill"></div></div>
+
+    <div id="flight" class="hidden">
+      <div id="speed"><span id="speed-val">0</span><small>u/s</small></div>
+      <div id="alt"></div>
+    </div>
+
+    <div id="throttle" class="hidden"><div id="throttle-fill"></div><span>THR</span></div>
+
+    <div id="actions">
+      <div class="ctx-row">
+        <button class="act ctx hidden" id="btn-ctx2" data-press="interact2"><span id="btn-ctx2-label">Exit</span></button>
+        <button class="act ctx hidden" id="btn-ctx" data-press="interact"><span id="btn-ctx-label">Board</span></button>
+      </div>
+      <div class="act-grid">
+        <button class="act foot" data-press="scan"><b>Scan</b></button>
+        <button class="act foot" data-hold="jump"><b>Jet</b></button>
+        <button class="act foot big" data-hold="primary"><b>Mine</b></button>
+        <button class="act ship hidden" id="btn-pulse" data-press="pulse"><b>Pulse</b></button>
+        <button class="act ship hidden" data-hold="boost"><b>Boost</b></button>
+        <button class="act ship big hidden" data-hold="primary"><b>Fire</b></button>
+      </div>
+    </div>
+
+    <div id="toasts"></div>
+    <div id="discovery" class="hidden"><div class="disc-kicker" id="disc-kicker">New discovery</div><div class="disc-name" id="disc-name"></div><div class="disc-sub" id="disc-sub"></div></div>
+  </div>
+
+  <!-- Title -->
+  <div id="title" class="overlay">
+    <div class="title-wrap">
+      <div class="title-kicker">An endless galaxy out past the 918</div>
+      <h1 class="logo">918<br>LIGHTYEARS</h1>
+      <p class="title-tag">Every star is a place you can go. Every world is yours to name first. Somewhere past 9,000 lightyears of dark is the Center of the Universe.</p>
+      <div class="title-buttons">
+        <button class="primary-btn" id="btn-continue" data-always="1">Continue Journey</button>
+        <button class="primary-btn" id="btn-new" data-always="1">Begin a New Journey</button>
+      </div>
+      <div class="title-controls" id="title-controls"></div>
+      <a class="back-link" href="../">Back to projects</a>
+    </div>
+  </div>
+
+  <!-- Generic panel -->
+  <div id="panel" class="overlay hidden">
+    <div class="panel-card">
+      <div class="panel-head"><h2 id="panel-title"></h2><button class="close-btn" id="panel-close" aria-label="Close">&times;</button></div>
+      <div id="panel-body"></div>
+    </div>
+  </div>
+
+  <!-- Galaxy map UI (the 3D map renders behind it) -->
+  <div id="map-ui" class="hidden">
+    <div id="map-gesture"></div>
+    <div id="map-top">
+      <div id="map-title">Galaxy Map</div>
+      <div id="map-core"></div>
+      <button class="close-btn" id="map-close" aria-label="Close map">&times;</button>
+    </div>
+    <div id="map-labels"></div>
+    <div id="map-card" class="hidden">
+      <div id="map-star-name"></div>
+      <div id="map-star-info"></div>
+      <div class="map-actions">
+        <button class="primary-btn" id="map-warp">Warp</button>
+      </div>
+    </div>
+    <div id="map-hint">Drag to look around. Pinch or scroll to zoom. Tap a star.</div>
+    <button class="ghost-btn" id="map-core-btn">Toward the Center</button>
+  </div>
+
+  <div id="fade"></div>
+  <div id="loading" class="hidden"><div class="spinner"></div><div id="loading-text">Charting the system</div></div>
+</div>
+<script type="module" src="/src/main.js"></script>
+</body>
+</html>
