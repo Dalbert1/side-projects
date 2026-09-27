@@ -217,6 +217,26 @@ Static brochure site for a construction company in Elk City, OK. **No Supabase, 
 - Accent: `#c9922e` (gold)
 - Warm: `#f5f0e8` (cream background)
 
+### 918 Lightyears (`lightyears/`)
+
+A No Man's Sky style space exploration game. **Vite + Three.js, no React, no Supabase.** Deploys to `/side-projects/lightyears/`.
+
+```bash
+cd lightyears && npm install && npm run dev
+# http://localhost:5173/side-projects/lightyears/
+```
+
+**Layout:**
+- `src/world/` - seeded galaxy and star systems (`universe.js`), planet recipes, terrain height function and chunk builder (`planetgen.js`), terrain web workers
+- `src/render/` - quadtree LOD planets, atmosphere/terrain/object shaders (`shaders.js`), clouds, rings, backdrop, ship/station/flora models, effects
+- `src/game/` - the `Game` loop and state machine (`game.js`), ship flight, on-foot player, surface flora, fauna, mining, asteroids, NPC traffic, objectives, save
+- `src/ui/` - input (touch stick, look drag, buttons, keyboard/mouse), HUD, menus, galaxy map
+- `src/audio/` - synthesized music and sound (WebAudio, no files)
+
+**Debug view:** `?debug&biome=lush&view=space|low|ground` renders a single planet. `?autostart=new` skips the title.
+
+**Saves** live in `localStorage` under `lightyears918.save.v1`.
+
 ---
 
 ## Supabase Setup

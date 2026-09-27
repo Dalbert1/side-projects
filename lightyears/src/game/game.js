@@ -290,7 +290,13 @@ export class Game {
     this.hud.setLocation(this.system.name, `${Math.round(distanceToCore(this.star)).toLocaleString()} ly to the Center`);
   }
 
+  snapCamera() {
+    this.camInit = false;
+    this.camQuatInit = false;
+  }
+
   enterPlay() {
+    this.snapCamera();
     document.getElementById('title').classList.add('hidden');
     this.hud.show(true);
     this.input.wantsPointerLock = !this.isTouch;
@@ -373,6 +379,7 @@ export class Game {
 
   boardShip() {
     this._setMode('ship');
+    this.snapCamera();
     this.ship.state = 'landed';
     this.audio.sfx('door');
     if (!this.boardedOnce) {
@@ -554,6 +561,7 @@ export class Game {
     });
     ship.state = 'undocking';
     this._setMode('ship');
+    this.snapCamera();
     setTimeout(() => this.fade(0, 1.0), 120);
     this.audio.sfx('launch');
   }
@@ -659,6 +667,7 @@ export class Game {
       this.ship.model.gear.visible = false;
       this.input.setThrottle(0.3);
       this.warpFrom = prevStar;
+      this.snapCamera();
     }
     if (w.t > 4.4) {
       this.warp.group.removeFromParent();
@@ -704,6 +713,7 @@ export class Game {
     this.ship.quat.setFromRotationMatrix(_m).multiply(_q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI));
     this.ship.state = 'flying';
     this._setMode('ship');
+    this.snapCamera();
     this.inv.warpCells += 2;
     this.fade(1, 0.01, true);
     setTimeout(() => this.fade(0, 2, true), 60);
@@ -750,7 +760,10 @@ export class Game {
     }
 
     // global buttons
-    if (pressed.has('menu')) this.menus.toggleMenu();
+    if (pressed.has('menu')) {
+      if (this.map.open) this.map.close();
+      else this.menus.toggleMenu();
+    }
     if (pressed.has('inventory')) this.menus.toggleInventory();
     if (pressed.has('map')) this.map.toggle();
 
