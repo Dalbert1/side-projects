@@ -60,6 +60,15 @@ jobs:
         run: npm run build
         working-directory: lightyears
 
+      # ── Build 918 Blast Radius (nuclear blast map) ──
+      - name: Install 918 Blast Radius deps
+        run: npm ci
+        working-directory: blastradius
+
+      - name: Build 918 Blast Radius
+        run: npm run build
+        working-directory: blastradius
+
       # ── Dugout Counter and the mini games are single HTML files, no build needed ──
 
       # ── Not deployed (source kept in repo, intentionally left off GitHub Pages):
@@ -73,6 +82,7 @@ jobs:
           cp -r osrs-inv-tracker/dist _site/osrs-inv-tracker
           cp -r recipebox/dist _site/recipebox
           cp -r lightyears/dist _site/lightyears
+          cp -r blastradius/dist _site/blastradius
           mkdir -p _site/dugoutcounter
           cp dugoutcounter/index.html _site/dugoutcounter/index.html
           cp games/ninja.html games/cowboy.html games/snake.html _site/games/

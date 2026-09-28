@@ -237,6 +237,26 @@ cd lightyears && npm install && npm run dev
 
 **Saves** live in `localStorage` under `lightyears918.save.v1`.
 
+### 918 Blast Radius (`blastradius/`)
+
+A NUKEMAP style nuclear blast simulator. Pick a real weapon (or any yield from 10 tons to 100 Mt), drop ground zero anywhere on a world map and see the blast rings, radiation, burns and a wind-driven fallout plume. **React + Vite + Tailwind + Leaflet, no Supabase.** Deploys to `/side-projects/blastradius/`.
+
+```bash
+cd blastradius && npm install && npm run dev
+# http://localhost:5173/side-projects/blastradius/
+```
+
+**Layout:**
+- `src/lib/effects.js` - the physics: blast, thermal and radiation radii (Glasstone & Dolan scaling) and the fallout contour model
+- `src/data/weapons.js` - the weapon list with yields, fission share and blurbs
+- `src/data/places.js` - Tulsa landmarks, regional towns and world cities used for quick targets, search and the "What's in range" list
+- `src/components/MapView.jsx` - Leaflet map, ring and plume layers, detonation animation
+- `src/lib/api.js` - Nominatim place search and reverse geocoding, Open-Meteo winds aloft (all free, no keys)
+
+**Share links:** every detonation writes its setup to the URL hash (`#lat=..&lng=..&kt=..&b=a|s&w=weaponId...`). Opening a link with a hash sets the strike off automatically.
+
+**Preferences** (units, map style, sound) live in `localStorage` under `blastradius918.*`.
+
 ---
 
 ## Supabase Setup
