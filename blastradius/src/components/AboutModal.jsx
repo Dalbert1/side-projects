@@ -67,7 +67,7 @@ export default function AboutModal({ onClose }) {
               <a className="text-hazard underline-offset-2 hover:underline" href="https://nuclearsecrecy.com/nukemap/" target="_blank" rel="noreferrer">
                 NUKEMAP
               </a>
-              . Map data from OpenStreetMap contributors, CARTO and Esri. Place search by Nominatim. Live winds from Open-Meteo. Weapon yields are public figures and many are estimates.
+              . Map data from OpenStreetMap contributors and Esri. Place search by Nominatim. Live winds from Open-Meteo. Weapon yields are public figures and many are estimates.
             </p>
           </div>
 

@@ -4,28 +4,29 @@ import { RING_INFO, FALLOUT_INFO, falloutAngles, falloutRadius, downwindBearing 
 import { destination } from '../lib/geo'
 import { trefoilSvg } from './Trefoil'
 
-const CARTO = { subdomains: 'abcd', maxZoom: 19, attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>' }
+// Every map style uses tile servers that need no API key.
+const OSM_URL = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png'
+const OSM = { maxZoom: 19, attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' }
+const ESRI = 'https://server.arcgisonline.com/ArcGIS/rest/services'
 
 export const BASEMAPS = {
   dark: {
     name: 'Dark',
     bg: '#0b0e13',
-    layers: [['https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', CARTO]],
+    // Standard OSM tiles, darkened with a CSS filter (see .tiles-dark).
+    layers: [[OSM_URL, { ...OSM, className: 'tiles-dark' }]],
   },
   streets: {
     name: 'Streets',
     bg: '#e5e3df',
-    layers: [['https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', CARTO]],
+    layers: [[OSM_URL, OSM]],
   },
   satellite: {
     name: 'Satellite',
     bg: '#0b0e13',
     layers: [
-      [
-        'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-        { maxZoom: 19, attribution: 'Imagery &copy; Esri, Maxar, Earthstar Geographics' },
-      ],
-      ['https://{s}.basemaps.cartocdn.com/rastertiles/dark_only_labels/{z}/{x}/{y}{r}.png', { ...CARTO, zIndex: 2 }],
+      [`${ESRI}/World_Imagery/MapServer/tile/{z}/{y}/{x}`, { maxZoom: 19, attribution: 'Imagery &copy; Esri, Maxar, Earthstar Geographics' }],
+      [`${ESRI}/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}`, { maxZoom: 19, zIndex: 2 }],
     ],
   },
 }

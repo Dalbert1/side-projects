@@ -196,3 +196,8 @@ input[type='search']::-webkit-search-cancel-button {
     opacity: 0.5;
   }
 }
+
+/* Turns light OpenStreetMap tiles into a dark map */
+.tiles-dark {
+  filter: invert(1) hue-rotate(180deg) brightness(0.9) contrast(0.9) saturate(0.6);
+}
