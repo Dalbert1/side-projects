@@ -111,9 +111,20 @@ export class Menus {
       where = `<div class="section"><h3>${p.name}</h3><div class="muted">${BIOMES[p.biome].label} world. ${p.hazard ? `${HAZARD_LABEL[p.hazard.type]} (${Math.round(p.hazard.level * 100)}%).` : 'No hazards.'} ${p.atmo ? '' : 'No atmosphere.'} ${p.liquid ? `Seas of ${p.liquid}.` : ''}</div></div>`;
     }
     const disc = g.discovered;
+    const shipD = g.shipDistance();
+    let shipRow = '';
+    if (shipD != null) {
+      const ok = g.ship.state === 'landed' && g.inv.fuel.launch >= 25;
+      const note = g.ship.state === 'summoning' ? 'On its way to you'
+        : g.inv.fuel.launch < 25 ? 'Needs 25% launch fuel to fly to you. Refuel it below.'
+          : 'It flies over and lands next to you';
+      shipRow = `<div class="section"><h3>Your ship</h3><div class="row"><div class="info">Golden Driller, ${fmt(shipD)} u away<small>${note}</small></div>
+        <button data-act="callship" ${ok && shipD > 25 ? '' : 'disabled'}>${shipD <= 25 ? 'Nearby' : 'Call ship'}</button></div></div>`;
+    }
     return `
       <div class="row" style="border:none;padding-top:0"><div class="info">Units<small>Your ship: the Golden Driller</small></div><div class="units">${fmt(inv.units)} u</div></div>
       <div class="row"><div class="info">Warp Cells<small>One per hyperspace jump</small></div><div class="units" style="color:var(--cyan)">${inv.warpCells}</div></div>
+      ${shipRow}
       <div class="section"><h3>Resources</h3>${this._resGrid()}</div>
       <div class="section"><h3>Refuel and recharge</h3>${rows}</div>
       <div class="section"><h3>Craft</h3>
@@ -200,6 +211,7 @@ export class Menus {
     const touch = this.game.isTouch;
     return `<div class="muted" style="display:grid;gap:10px">
       <div><b style="color:var(--ink)">On foot.</b> ${touch ? 'Left thumb moves, drag the right side to look.' : 'WASD to move, mouse to look.'} Hold <b>Mine</b> to cut resources with your beam, tap <b>Scan</b> to reveal deposits and discover new species, hold <b>Jet</b> to fly with your jetpack.</div>
+      <div><b style="color:var(--ink)">Finding your ship.</b> A new journey starts right beside it. When you wander off, the gold SHIP marker shows where it is and how far, and sticks to the edge of the screen with an arrow when it is behind you. Once it has launch fuel you can call it from the inventory and it lands next to you.</div>
       <div><b style="color:var(--ink)">Your ship.</b> ${touch ? 'Left thumb steers. The slider on the right is your throttle.' : 'Mouse or arrow keys steer, W and S set throttle.'} <b>Boost</b> for speed, <b>Fire</b> to shoot asteroids for Tritium. Get low over the ground and tap <b>Land</b>.</div>
       <div><b style="color:var(--ink)">Space.</b> <b>Pulse</b> jumps you across a system in seconds. Fly up to the station's glowing slot and tap <b>Dock</b> to trade and buy upgrades.</div>
       <div><b style="color:var(--ink)">The galaxy.</b> Craft a Warp Cell, open the map, pick a star in range, and warp. Every jump toward the core brings you closer to the Center of the Universe.</div>
@@ -230,6 +242,13 @@ export class Menus {
           g.audio.sfx('collect');
           if (arg === 'launch') g.objectives.event('refueled');
         }
+        break;
+      }
+      case 'callship': {
+        const r = g.callShip();
+        if (r === 'ok') { this.close(); return; }
+        if (r === 'fuel') g.hud.toast('Your ship needs 25% launch fuel to fly to you', 'warn');
+        else if (r === 'nosite') g.hud.toast('No flat, dry ground nearby for it to land on', 'warn');
         break;
       }
       case 'craft':

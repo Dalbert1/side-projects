@@ -74,6 +74,8 @@ export class Ship {
     this.vel.set(0, 0, 0);
     this.model.gear.visible = true;
     this.landedPlanet = planet;
+    this.bank = 0;
+    this.syncModel();
     g.input.setThrottle(0);
   }
 
@@ -108,7 +110,11 @@ export class Ship {
     const power = this.state === 'landed' ? 0.05 : Math.min(1.5, 0.25 + this.speed / 300 + (this.pulseOn ? 1 : 0));
     this.model.glowMat.uniforms.uPower.value += (power - this.model.glowMat.uniforms.uPower.value) * Math.min(1, dt * 6);
 
-    // visual bank on the model only
+    this.syncModel();
+  }
+
+  // Put the visible model where the ship is (with the visual-only bank)
+  syncModel() {
     this.group.position.copy(this.pos);
     _q.setFromAxisAngle(FWD, this.bank);
     this.group.quaternion.copy(this.quat).multiply(_q);
@@ -291,8 +297,10 @@ export class Ship {
     a.t += dt;
     const k = Math.min(1, a.t / a.dur);
     const e = ease(k);
-    if (a.kind === 'land' || a.kind === 'launch' || a.kind === 'dock' || a.kind === 'undock') {
+    if (a.kind === 'land' || a.kind === 'launch' || a.kind === 'dock' || a.kind === 'undock' || a.kind === 'summon') {
       this.pos.lerpVectors(a.fromPos, a.toPos, a.kind === 'launch' ? k * (2 - k) : e);
+      if (a.arc) this.pos.addScaledVector(a.up, Math.sin(Math.PI * k) * a.arc);
+      if (a.kind === 'summon' && k > 0.8) this.model.gear.visible = true;
       this.quat.slerpQuaternions(a.fromQuat, a.toQuat, Math.min(1, e * 1.4));
       this.speed = a.fromPos.distanceTo(a.toPos) / a.dur;
       this.bank *= 1 - Math.min(1, dt * 3);

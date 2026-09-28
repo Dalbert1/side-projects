@@ -36,6 +36,7 @@ export const QUALITY = {
 const _v = new THREE.Vector3();
 const _v2 = new THREE.Vector3();
 const _v3 = new THREE.Vector3();
+const BOARD_RANGE = 12;
 const _q = new THREE.Quaternion();
 const _m = new THREE.Matrix4();
 
@@ -369,10 +370,19 @@ export class Game {
     // step out on the pilot's right side
     const side = ship.left.clone().negate();
     side.addScaledVector(up, -side.dot(up)).normalize();
-    const spot = local.clone().addScaledVector(side, 5.5).addScaledVector(ship.forward, -1.5);
+    const spot = first
+      ? local.clone().addScaledVector(side, 9).addScaledVector(ship.forward, 9)
+      : local.clone().addScaledVector(side, 5.5).addScaledVector(ship.forward, -1.5);
     const fwd = ship.forward.clone();
-    if (first) fwd.copy(side).negate().applyAxisAngle(up, -0.6);
+    // on a new game, start out looking at the ship so you know where it is
+    if (first) fwd.copy(local).sub(spot);
     this.player.spawn(planet, spot, fwd);
+    if (first) {
+      const p = this.player;
+      const eye = p.pos.clone().addScaledVector(p.pos.clone().normalize(), EYE);
+      const toShip = local.clone().sub(eye).normalize();
+      p.pitch = THREE.MathUtils.clamp(Math.asin(toShip.dot(p.pos.clone().normalize())), -0.5, 0.5);
+    }
     this._setMode('foot');
     this.audio.sfx('door');
   }
@@ -389,6 +399,74 @@ export class Game {
     this.objectives.event('boarded');
     // suit systems recharge inside the cockpit
     this.inv.suit.hazard = Math.max(this.inv.suit.hazard, 100);
+  }
+
+  // How far the landed ship is from you on foot, or null if it is not on this planet
+  shipDistance() {
+    if (this.mode !== 'foot' || this.ship.landedPlanet !== this.player.planet) return null;
+    if (this.ship.state !== 'landed' && this.ship.state !== 'summoning') return null;
+    return this.player.eyeWorld.distanceTo(this.ship.pos);
+  }
+
+  // Fly the landed ship over and set it down near you, NMS style
+  callShip() {
+    const ship = this.ship;
+    const player = this.player;
+    const planet = player.planet;
+    if (this.shipDistance() == null || ship.state !== 'landed') return 'unavailable';
+    if (this.inv.fuel.launch < 25) return 'fuel';
+    const pLocal = player.pos;
+    const up = pLocal.clone().normalize();
+    const fwd = player.forward.clone().addScaledVector(up, -player.forward.dot(up)).normalize();
+    const side = new THREE.Vector3().crossVectors(fwd, up);
+    let site = null;
+    const cand = new THREE.Vector3();
+    outer: for (const dist of [15, 22, 30, 40, 55, 70]) {
+      for (let a = 0; a < 12; a++) {
+        const ang = (a % 2 ? 1 : -1) * Math.ceil(a / 2) * 0.5;
+        cand.copy(pLocal).addScaledVector(fwd, Math.cos(ang) * dist).addScaledVector(side, Math.sin(ang) * dist).normalize();
+        const h = planet.sampler.height(cand.x, cand.y, cand.z);
+        if (planet.params.liquid && h < 1) continue;
+        if (this._slopeAt(planet, cand, h) > 0.2) continue;
+        site = cand.clone();
+        break outer;
+      }
+    }
+    if (!site) return 'nosite';
+    const r = planet.surfaceRadius(site.x, site.y, site.z);
+    const toPos = site.clone().multiplyScalar(r + 2.3).add(planet.pos);
+    // land side on to you so you see the whole ship
+    const travel = toPos.clone().sub(ship.pos);
+    let face = travel.addScaledVector(site, -travel.dot(site));
+    if (face.lengthSq() < 1) face = side.clone();
+    face.normalize();
+    const x = new THREE.Vector3().crossVectors(site, face).normalize();
+    _m.makeBasis(x, site, face);
+    const toQuat = new THREE.Quaternion().setFromRotationMatrix(_m);
+    const dist = ship.pos.distanceTo(toPos);
+    ship.model.gear.visible = false;
+    ship.startAnim('summon', {
+      dur: THREE.MathUtils.clamp(dist / 55, 3, 9),
+      fromPos: ship.pos.clone(),
+      toPos,
+      fromQuat: ship.quat.clone(),
+      toQuat,
+      arc: Math.min(140, 22 + dist * 0.3),
+      up: site.clone(),
+      onDone: () => {
+        ship.state = 'landed';
+        ship.speed = 0;
+        ship.vel.set(0, 0, 0);
+        ship.model.gear.visible = true;
+        this.surface?.exclude(toPos.clone().sub(planet.pos), 13);
+        this.hud.toast('Your ship has landed nearby', 'good');
+        this.save();
+      },
+    });
+    ship.state = 'summoning';
+    this.audio.sfx('launch');
+    setTimeout(() => this.audio.sfx('land'), Math.max(0, (ship.anim.dur - 2.4) * 1000));
+    return 'ok';
   }
 
   tryLaunch() {
@@ -954,9 +1032,14 @@ export class Game {
     cam.fov += (this.fov - cam.fov) * Math.min(1, dt * 4);
 
     // ship proximity
+    if (this.ship.anim) this.ship.update(dt, input);
     const shipLocal = _v.copy(this.ship.pos).sub(planet.pos);
     const dShip = shipLocal.distanceTo(player.pos);
-    if (this.ship.state === 'landed' && this.ship.landedPlanet === planet && dShip < 9) {
+    if (dShip > 90 && !this.lostShipHint && this.ship.landedPlanet === planet) {
+      this.lostShipHint = true;
+      this.hud.toast('Lost your ship? Follow the gold SHIP marker, or call it from your inventory.', '', 0);
+    }
+    if (this.ship.state === 'landed' && this.ship.landedPlanet === planet && dShip < BOARD_RANGE) {
       this.hud.setContext('Board ship', 'E');
       if (pressed.has('interact')) { this.boardShip(); return; }
     } else this.hud.setContext(null);
@@ -1029,7 +1112,11 @@ export class Game {
   _updateWorld(dt) {
     const cam = this.camera;
     this._updateSun(dt);
-    if (this.mode !== 'title') this.ship.group.visible = this.mode !== 'warp' && this.ship.state !== 'docked';
+    if (this.mode !== 'title') {
+      this.ship.group.visible = this.mode !== 'warp' && this.ship.state !== 'docked';
+      // the ship only simulates in ship mode, so keep its model in place otherwise
+      if (this.mode !== 'ship' && !this.ship.anim) this.ship.syncModel();
+    }
     const focus = this.mode === 'foot' ? this.player.eyeWorld : this.mode === 'title' ? cam.position : this.ship.pos;
     if (this.mode !== 'foot' && this.mode !== 'ship') this._updateNearest(focus);
     const nearest = this.nearest;
@@ -1174,11 +1261,15 @@ export class Game {
           if (d > 400) list.push({ id: 'st', pos: this.station.pos, label: this.station.name, color: '#7fe3ff', dist: d });
         }
       }
-      if (this.mode === 'foot' && this.ship.state === 'landed') {
+      const shipHere = this.ship.landedPlanet === this.player.planet;
+      if (this.mode === 'foot' && shipHere && (this.ship.state === 'landed' || this.ship.state === 'summoning')) {
         const d = this.player.eyeWorld.distanceTo(this.ship.pos);
-        if (d > 14) list.push({ id: 'ship', pos: _v.copy(this.ship.pos).add(_v2.copy(this.player.up).multiplyScalar(3)), label: 'Ship', color: '#ffb547', dist: d });
+        if (d > BOARD_RANGE || this.ship.state === 'summoning') {
+          list.push({ id: 'ship', kind: 'ship', pos: _v.copy(this.ship.pos).add(_v2.copy(this.player.up).multiplyScalar(3.5)), label: 'Ship', color: '#ffb547', dist: d });
+        }
       }
       this.mining.addMarkers(list);
+      cam.updateMatrixWorld();
       hud.updateMarkers(cam, list, this.width, this.height);
     }
   }
@@ -1251,10 +1342,12 @@ export class Game {
   save() {
     if (!this.playing || !this.system || this.mode === 'warp') return;
     const ship = this.ship;
-    const shipData = { state: ship.state === 'landed' ? 'landed' : 'flying' };
-    if (ship.state === 'landed' && ship.landedPlanet) {
+    const landed = ship.state === 'landed' || ship.state === 'summoning';
+    const shipData = { state: landed ? 'landed' : 'flying' };
+    if (landed && ship.landedPlanet) {
       const planet = ship.landedPlanet;
-      const local = ship.pos.clone().sub(planet.pos).normalize();
+      const at = ship.state === 'summoning' && ship.anim ? ship.anim.toPos : ship.pos;
+      const local = at.clone().sub(planet.pos).normalize();
       ship.axes();
       shipData.planet = planet.params.index;
       shipData.dir = local.toArray();

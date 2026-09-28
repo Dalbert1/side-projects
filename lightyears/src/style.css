@@ -302,6 +302,32 @@ button { font-family: inherit; color: inherit; }
 .marker.res .dot { border-radius: 50%; transform: none; width: 18px; height: 18px; display: flex; align-items: center; justify-content: center; font-size: 9px; }
 .marker .dist { display: block; font-size: 10px; color: var(--dim); font-weight: 600; }
 .marker.edge .label { display: none; }
+.marker.ship .dot {
+  width: 17px; height: 17px;
+  border-width: 3px;
+  background: rgba(255, 181, 71, 0.25);
+  box-shadow: 0 0 12px rgba(255, 181, 71, 0.8);
+  animation: shipPing 1.6s ease-in-out infinite;
+}
+.marker.ship .label { font-size: 13px; letter-spacing: 2px; }
+.marker.ship .dist { font-size: 12px; color: var(--ink); }
+.marker.edge.ship .label { display: inline; }
+.marker .arrow {
+  display: none;
+  position: absolute;
+  left: 50%;
+  top: 10px;
+  width: 0; height: 0;
+  border-left: 9px solid transparent;
+  border-right: 9px solid transparent;
+  border-bottom: 13px solid currentColor;
+  filter: drop-shadow(0 0 4px rgba(0, 0, 0, 0.8));
+}
+.marker.edge .arrow { display: block; }
+@keyframes shipPing {
+  0%, 100% { box-shadow: 0 0 6px rgba(255, 181, 71, 0.5); }
+  50% { box-shadow: 0 0 16px rgba(255, 181, 71, 1); }
+}
 
 /* toasts */
 #toasts {

@@ -203,17 +203,21 @@ export class Hud {
         el.className = `marker ${m.kind || ''}`;
         el.innerHTML = m.kind === 'res'
           ? `<div class="dot">${m.symbol || ''}</div>`
-          : `<div class="dot"></div><span class="label"></span><span class="dist"></span>`;
+          : `<div class="dot"></div><span class="label"></span><span class="dist"></span>${m.kind === 'ship' ? '<div class="arrow"></div>' : ''}`;
         el.labelEl = el.querySelector('.label');
         el.distEl = el.querySelector('.dist');
+        el.arrowEl = el.querySelector('.arrow');
         this.markersEl.appendChild(el);
         this.markerPool.set(m.id, el);
         el.style.color = m.color || '#fff';
       }
-      _v.copy(m.pos).project(camera);
+      // decide "behind" from view space depth: the projection's near/far planes change
+      // between render passes, so projected z alone is not reliable
+      _v.copy(m.pos).applyMatrix4(camera.matrixWorldInverse);
+      const behind = _v.z > 0;
+      _v.applyMatrix4(camera.projectionMatrix);
       let x = (_v.x * 0.5 + 0.5) * w;
       let y = (-_v.y * 0.5 + 0.5) * h;
-      const behind = _v.z > 1;
       let edge = false;
       if (behind) { x = w - x; y = h - y; }
       if (behind || x < margin || x > w - margin || y < margin + 40 || y > h - margin) {
@@ -222,11 +226,13 @@ export class Hud {
         const cx = w / 2, cy = h / 2;
         let dx = x - cx, dy = y - cy;
         if (behind && Math.abs(dx) < 1 && Math.abs(dy) < 1) dy = 1;
-        const sx = (w / 2 - margin) / Math.abs(dx || 1e-6);
-        const sy = (h / 2 - margin - 20) / Math.abs(dy || 1e-6);
+        // keep edge markers (and the ship arrow) fully on screen and clear of the top HUD row
+        const sx = (w / 2 - margin - 16) / Math.abs(dx || 1e-6);
+        const sy = (h / 2 - margin - 40) / Math.abs(dy || 1e-6);
         const s = Math.min(sx, sy);
         x = cx + dx * s;
         y = cy + dy * s;
+        if (el.arrowEl) el.arrowEl.style.transform = `translate(-50%, -50%) rotate(${(Math.atan2(dy, dx) + Math.PI / 2).toFixed(3)}rad) translateY(-22px)`;
       }
       el.style.display = '';
       el.classList.toggle('edge', edge);
