@@ -16,6 +16,17 @@ const _m = new THREE.Matrix4();
 
 const ease = (t) => (t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2);
 
+// Landing gear pads (ship local x, z) and the height of their feet
+const PADS = [[0, 2.6], [-1.6, -2.6], [1.6, -2.6]];
+const PAD_Y = -2.17;
+// Low points of the hull (x, z, y) that must stay above the ground when landed
+const HULL = [
+  [0, 6.9, -0.2], [0, 3.8, -0.95], [0, 2.4, -1.05], [0, -3.0, -1.05],
+  [1.35, -5.1, -0.8], [-1.35, -5.1, -0.8], [4.8, -1.9, -0.45], [-4.8, -1.9, -0.45],
+  [3.0, -1.2, -0.35], [-3.0, -1.2, -0.35],
+];
+const MAX_TILT = 0.2; // about 11 degrees
+
 export class Ship {
   constructor(game) {
     this.game = game;
@@ -32,7 +43,6 @@ export class Ship {
     this.state = 'flying';
     this.pulse = 0; // 0..1 spool
     this.pulseOn = false;
-    this.boostEnergy = 1;
     this.anim = null;
     this.drillSpin = 0;
     this.shake = 0;
@@ -59,16 +69,97 @@ export class Ship {
     this.left.copy(LEFT).applyQuaternion(this.quat);
   }
 
-  // Place the ship landed at planet-local point on `planet`
-  placeLanded(planet, dirLocal, heading) {
+  // How the ship would sit if landed at planet-local direction `dirLocal`, nose along
+  // `heading`: the pads are fitted to the ground (tilting on gentle slopes) and the
+  // whole ship is raised if any part of the hull would otherwise dip into a bump.
+  landingPose(planet, dirLocal, heading) {
+    const up0 = dirLocal.clone().normalize();
+    const f0 = heading ? heading.clone() : new THREE.Vector3(1, 0, 0);
+    f0.addScaledVector(up0, -f0.dot(up0));
+    if (f0.lengthSq() < 1e-6) f0.set(1, 0, 0).addScaledVector(up0, -up0.x);
+    if (f0.lengthSq() < 1e-6) f0.set(0, 0, 1).addScaledVector(up0, -up0.z);
+    f0.normalize();
+    const l0 = new THREE.Vector3().crossVectors(up0, f0);
+    const base = up0.clone().multiplyScalar(planet.R);
+    const sampler = planet.sampler;
+    const liquid = planet.params.liquid;
+    const tmp = new THREE.Vector3();
+    let wet = false;
+    let lava = false;
+    const ground = (x, z) => {
+      tmp.copy(base).addScaledVector(l0, x).addScaledVector(f0, z).normalize();
+      const h = sampler.height(tmp.x, tmp.y, tmp.z);
+      if (liquid && h < 0) {
+        wet = true;
+        if (liquid === 'lava') lava = true;
+        return 0; // liquids are flat at sea level
+      }
+      return h;
+    };
+    // plane through the three pads, in the tangent frame (x = left, y = up, z = forward)
+    const P = PADS.map(([x, z]) => new THREE.Vector3(x, ground(x, z), z));
+    const n = new THREE.Vector3().crossVectors(P[1].clone().sub(P[0]), P[2].clone().sub(P[0]));
+    if (n.y < 0) n.negate();
+    n.normalize();
+    const tiltRaw = Math.acos(Math.min(1, n.y));
+    if (tiltRaw > MAX_TILT) {
+      const k = Math.sin(MAX_TILT) / Math.max(1e-6, Math.hypot(n.x, n.z));
+      n.set(n.x * k, Math.cos(MAX_TILT), n.z * k);
+    }
+    const up = new THREE.Vector3().addScaledVector(l0, n.x).addScaledVector(up0, n.y).addScaledVector(f0, n.z).normalize();
+    const fwd = f0.clone().addScaledVector(up, -f0.dot(up)).normalize();
+    const left = new THREE.Vector3().crossVectors(up, fwd);
+    // lowest height (above the base radius) that keeps every point clear of the ground
+    const off = new THREE.Vector3();
+    const need = (x, y, z, margin) => {
+      off.set(0, 0, 0).addScaledVector(left, x).addScaledVector(up, y).addScaledVector(fwd, z);
+      const yt = off.dot(up0);
+      return ground(off.dot(l0), off.dot(f0)) + margin - yt;
+    };
+    let H = -Infinity;
+    for (const [x, z] of PADS) H = Math.max(H, need(x, PAD_Y, z, 0.03));
+    let hull = -Infinity;
+    for (const [x, z, y] of HULL) hull = Math.max(hull, need(x, y, z, 0.15));
+    const raise = Math.max(0, hull - H);
+    H += raise;
+    _m.makeBasis(left, up, fwd);
+    const quat = new THREE.Quaternion().setFromRotationMatrix(_m);
+    const pos = up0.multiplyScalar(planet.R + H).add(planet.pos);
+    const score = raise + Math.max(0, tiltRaw - MAX_TILT) * 8 + (wet ? 6 : 0) + (lava ? 1000 : 0);
+    return { planet, dir: dirLocal.clone().normalize(), heading: fwd.clone(), pos, quat, raise, tiltRaw, wet, lava, score };
+  }
+
+  // Search rings around `originDir` for a spot to set down. Takes the closest good dry
+  // site; otherwise the least bad one (a raised ship on bumpy ground, or floating on
+  // water). Never lava.
+  findLandingSite(planet, originDir, heading, rings = [0, 15, 30, 50, 80, 120, 170, 240]) {
+    const up0 = originDir.clone().normalize();
+    const f0 = heading.clone().addScaledVector(up0, -heading.dot(up0));
+    if (f0.lengthSq() < 1e-6) f0.set(1, 0, 0).addScaledVector(up0, -up0.x);
+    f0.normalize();
+    const s0 = new THREE.Vector3().crossVectors(f0, up0);
+    const cand = new THREE.Vector3();
+    let best = null;
+    for (const dist of rings) {
+      const count = dist === 0 ? 1 : Math.min(16, 6 + Math.round(dist / 20));
+      for (let a = 0; a < count; a++) {
+        const ang = (a / count) * Math.PI * 2;
+        cand.copy(up0).multiplyScalar(planet.R).addScaledVector(f0, Math.cos(ang) * dist).addScaledVector(s0, Math.sin(ang) * dist);
+        const pose = this.landingPose(planet, cand, heading);
+        if (pose.lava) continue;
+        if (!pose.wet && pose.raise < 0.3 && pose.tiltRaw < 0.24) return pose;
+        if (!best || pose.score < best.score) best = pose;
+      }
+    }
+    return best;
+  }
+
+  // Put the ship down (instantly) at a pose from landingPose, or compute one here
+  placeLanded(planet, dirLocal, heading, pose = null) {
     const g = this.game;
-    const d = dirLocal.clone().normalize();
-    const r = planet.surfaceRadius(d.x, d.y, d.z);
-    this.pos.copy(d).multiplyScalar(r + 2.3).add(planet.pos);
-    const fwd = heading ? heading.clone() : new THREE.Vector3(0, 0, 1);
-    fwd.addScaledVector(d, -fwd.dot(d)).normalize();
-    if (fwd.lengthSq() < 0.1) fwd.set(1, 0, 0).addScaledVector(d, -d.x).normalize();
-    this._orient(fwd, d);
+    const p = pose || this.landingPose(planet, dirLocal, heading);
+    this.pos.copy(p.pos);
+    this.quat.copy(p.quat);
     this.state = 'landed';
     this.speed = 0;
     this.vel.set(0, 0, 0);
@@ -175,9 +266,7 @@ export class Ship {
     }
 
     // speed
-    const boosting = (input.held.has('boost') || input.held.has('jump')) && this.boostEnergy > 0.02 && !this.pulseOn;
-    if (boosting) this.boostEnergy = Math.max(0, this.boostEnergy - dt * 0.18);
-    else this.boostEnergy = Math.min(1, this.boostEnergy + dt * 0.12);
+    const boosting = (input.held.has('boost') || input.held.has('jump')) && !this.pulseOn;
     this.boosting = boosting;
     const minSpeed = inAtmo ? 28 : 0;
     const maxSpeed = inAtmo ? Math.min(st.maxSpeed, 150) : st.maxSpeed;
@@ -196,12 +285,6 @@ export class Ship {
       } else {
         this.pulse = Math.min(1, this.pulse + dt * 0.8);
         target = st.pulseSpeed * this.pulse;
-        g.inv.drainPulse(dt);
-        if (g.inv.fuel.pulse <= 0) {
-          this.pulseOn = false;
-          g.hud.toast('Pulse fuel empty. Mine asteroids for Tritium', 'warn');
-          g.audio?.pulseStop();
-        }
       }
     } else this.pulse = 0;
 

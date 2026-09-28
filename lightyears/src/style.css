@@ -422,6 +422,7 @@ button { font-family: inherit; color: inherit; }
 .title-controls { font-size: 13px; color: var(--dim); line-height: 1.5; margin-top: 6px; }
 .back-link { display: inline-block; margin-top: 16px; color: var(--faint); font-size: 12px; letter-spacing: 2px; text-transform: uppercase; text-decoration: none; }
 
+#panel.under-map { display: none; }
 #panel { background: rgba(2, 3, 10, 0.55); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); }
 .panel-card {
   margin: auto;

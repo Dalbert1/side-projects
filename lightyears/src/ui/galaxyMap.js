@@ -71,19 +71,6 @@ export class GalaxyMap {
     this.galaxyPts.frustumCulled = false;
     this.scene.add(this.galaxyPts);
 
-    // range ring on the galactic plane and a faint sphere
-    this.rangeRing = new THREE.Mesh(
-      new THREE.RingGeometry(0.985, 1, 96),
-      new THREE.MeshBasicMaterial({ color: 0x7fe3ff, transparent: true, opacity: 0.55, side: THREE.DoubleSide, depthWrite: false }),
-    );
-    this.rangeRing.rotation.x = -Math.PI / 2;
-    this.scene.add(this.rangeRing);
-    this.rangeSphere = new THREE.Mesh(
-      new THREE.SphereGeometry(1, 32, 16),
-      new THREE.MeshBasicMaterial({ color: 0x7fe3ff, transparent: true, opacity: 0.03, depthWrite: false, wireframe: true }),
-    );
-    this.scene.add(this.rangeSphere);
-
     // selection line and markers
     this.lineGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]);
     this.line = new THREE.Line(this.lineGeo, new THREE.LineBasicMaterial({ color: 0xffb547, transparent: true, opacity: 0.9 }));
@@ -181,6 +168,8 @@ export class GalaxyMap {
     g.mining.stop();
     this.ui.classList.remove('hidden');
     document.getElementById('hud').classList.add('hidden');
+    // the station panel would sit on top of the map; tuck it away until the map closes
+    document.getElementById('panel').classList.add('under-map');
     this._build();
     this.select(null);
     this.target.set(0, 0, 0);
@@ -199,6 +188,7 @@ export class GalaxyMap {
     g.input.enabled = true;
     this.ui.classList.add('hidden');
     this.labels.innerHTML = '';
+    document.getElementById('panel').classList.remove('under-map');
     if (g.playing && g.mode !== 'warp') document.getElementById('hud').classList.remove('hidden');
   }
 
@@ -284,9 +274,6 @@ export class GalaxyMap {
     }
     this.coreGlow.position.set(-here.pos[0] * SCALE, -here.pos[1] * SCALE, -here.pos[2] * SCALE);
     this.coreGlow.scale.setScalar(40);
-    const range = g.inv.jumpRange * SCALE;
-    this.rangeRing.scale.setScalar(range);
-    this.rangeSphere.scale.setScalar(range);
     this.hereRing.position.set(0, 0, 0);
   }
 
@@ -303,19 +290,15 @@ export class GalaxyMap {
     if (best) this.select(best);
   }
 
+  // pick the star on the map that is closest to the core
   _towardCore() {
-    const g = this.game;
-    const range = g.inv.jumpRange;
     let best = null, bestD = Infinity;
     for (const s of this.stars) {
       if (s.id === this.here.id) continue;
-      const d = this._dist(s);
-      if (d > range) continue;
       const dc = distanceToCore(s);
       if (dc < bestD) { bestD = dc; best = s; }
     }
     if (best) this.select(best);
-    else g.hud.toast('No stars in range. Upgrade your hyperdrive at a station.', 'warn');
   }
 
   _dist(s) {
@@ -335,23 +318,17 @@ export class GalaxyMap {
     s = this.selected;
     this.targetGoal.copy(s.mapPos);
     const d = this._dist(s);
-    const range = g.inv.jumpRange;
-    const inRange = d <= range;
     const visited = g.visited.has(s.id);
     const dc = distanceToCore(s);
     const cls = STAR_CLASSES[s.cls];
     document.getElementById('map-star-name').textContent = s.name;
     document.getElementById('map-star-info').innerHTML = s.core
-      ? `The galactic core. ${Math.round(d).toLocaleString()} ly away.<br>${inRange ? 'In range.' : `Out of range (your drive reaches ${range.toLocaleString()} ly).`}`
-      : `${cls.label}, ${s.planets} planets${visited ? ', visited' : ''}<br>${Math.round(d).toLocaleString()} ly away &middot; ${Math.round(dc).toLocaleString()} ly from the Center${inRange ? '' : `<br><span style="color:var(--red)">Out of range. Drive reaches ${range.toLocaleString()} ly.</span>`}`;
-    const canWarpHere = g.mode === 'ship' && g.ship.state === 'flying' && !g.ship.inAtmo;
-    let label = 'Warp';
-    let ok = inRange;
-    if (!inRange) label = 'Out of range';
-    else if (g.inv.warpCells < 1) { label = 'Need a Warp Cell'; ok = false; }
-    else if (!canWarpHere) { label = 'Warp from space in your ship'; ok = false; }
-    this.warpBtn.textContent = label;
-    this.warpBtn.disabled = !ok;
+      ? `The galactic core, ${Math.round(d).toLocaleString()} ly away.`
+      : `${cls.label}, ${s.planets} planets${visited ? ', visited' : ''}<br>${Math.round(d).toLocaleString()} ly away &middot; ${Math.round(dc).toLocaleString()} ly from the Center`;
+    // warps are free; you just need to be in your ship (flying, landed, or docked)
+    const inShip = g.mode === 'ship';
+    this.warpBtn.textContent = inShip ? 'Warp' : 'Get in your ship to warp';
+    this.warpBtn.disabled = !inShip;
     this.card.classList.remove('hidden');
     this.selRing.visible = true;
     this.line.visible = true;
@@ -360,7 +337,7 @@ export class GalaxyMap {
     arr[3] = s.mapPos.x; arr[4] = s.mapPos.y; arr[5] = s.mapPos.z;
     this.lineGeo.attributes.position.needsUpdate = true;
     this.lineGeo.computeBoundingSphere();
-    this.line.material.color.set(inRange ? 0xffb547 : 0xff5d5d);
+    this.line.material.color.set(0xffb547);
   }
 
   _warp() {

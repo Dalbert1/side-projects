@@ -1,4 +1,4 @@
-// Asteroid fields in open space. Shoot them for Tritium (pulse fuel), sometimes Gold.
+// Asteroid fields in open space. Shoot them for Tritium to sell, sometimes Gold.
 import * as THREE from 'three';
 import { Rng, hashInts } from '../core/rng.js';
 import { MeshBuilder } from '../render/meshBuilder.js';

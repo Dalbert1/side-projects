@@ -3,7 +3,7 @@
 import * as THREE from 'three';
 import { TerrainWorkerPool } from '../world/workerPool.js';
 import { generateSystem, startStar, starById, distanceToCore, CENTER_ID } from '../world/universe.js';
-import { BIOMES, HAZARD_LABEL } from '../world/planetgen.js';
+import { BIOMES } from '../world/planetgen.js';
 import { Planet } from '../render/planet.js';
 import { Backdrop } from '../render/backdrop.js';
 import { G, makeAtmoUniforms, copyAtmoUniforms } from '../render/shaders.js';
@@ -237,19 +237,18 @@ export class Game {
     this.discovered.systems[home.id] = home.name;
     this.worldTime = 0;
     const planet = this.planets[0];
-    // spawn in the morning: a spot where the sun is about 35 degrees up
+    // start in the morning (sun about 35 degrees up), nose pointed across the sunlight
     const sun = G.uSunDir.value.clone();
     const side = new THREE.Vector3(0, 1, 0).cross(sun).normalize();
-    let dir = sun.clone().multiplyScalar(Math.cos(0.95)).addScaledVector(side, Math.sin(0.95)).normalize();
-    dir = this._findLand(planet, dir);
-    const heading = sun.clone().addScaledVector(dir, -sun.dot(dir)).normalize();
-    this.ship.placeLanded(planet, dir, heading);
-    this.inv.fuel.launch = 0;
-    this._exitShipTo(planet, true);
+    const dir = sun.clone().multiplyScalar(Math.cos(0.95)).addScaledVector(side, Math.sin(0.95)).normalize();
+    const pose = this.ship.findLandingSite(planet, dir, side, [0, 30, 60, 100, 150, 220, 300, 400, 550]);
+    this.ship.placeLanded(planet, pose.dir, pose.heading, pose);
+    // you start in the cockpit, ready to go
+    this._setMode('ship');
+    this.boardedOnce = true;
     this.enterPlay();
-    this.pendingCrashCrystals = true;
     this.hud.setLocation(planet.params.name, `${this.system.name} system`);
-    setTimeout(() => this.hud.toast('Your launch thrusters are dry. Find blue Di-hydrogen crystals.', 'warn', 0), 2600);
+    setTimeout(() => this.hud.toast('No fuel, no crafting. Open the Galaxy Map any time to warp to any star.', 'good', 0), 2600);
   }
 
   continueGame() {
@@ -317,41 +316,6 @@ export class Game {
     document.getElementById('btn-continue').classList.toggle('hidden', !hasGame(this.saved));
   }
 
-  _findLand(planet, dir) {
-    // spiral outward from dir looking for gentle dry ground
-    const tan = new THREE.Vector3(0, 1, 0).cross(dir);
-    if (tan.lengthSq() < 1e-6) tan.set(1, 0, 0);
-    tan.normalize();
-    const bit = new THREE.Vector3().crossVectors(dir, tan);
-    const tmp = new THREE.Vector3();
-    let fallback = null;
-    for (let r = 0; r < 48; r++) {
-      const ang = r * 2.39996;
-      const dist = r * 0.0075;
-      tmp.copy(dir).addScaledVector(tan, Math.cos(ang) * dist).addScaledVector(bit, Math.sin(ang) * dist).normalize();
-      const h = planet.sampler.height(tmp.x, tmp.y, tmp.z);
-      if (h > 4 && h < 80) {
-        const slope = this._slopeAt(planet, tmp, h);
-        if (slope < 0.12) return tmp.clone();
-        if (!fallback && slope < 0.25) fallback = tmp.clone();
-      }
-    }
-    return fallback || dir.clone();
-  }
-
-  _slopeAt(planet, dir, h) {
-    const t = new THREE.Vector3(0, 1, 0).cross(dir);
-    if (t.lengthSq() < 1e-6) t.set(1, 0, 0);
-    t.normalize();
-    const b = new THREE.Vector3().crossVectors(dir, t);
-    const e = 3 / planet.R;
-    const a = dir.clone().addScaledVector(t, e).normalize();
-    const c = dir.clone().addScaledVector(b, e).normalize();
-    const h1 = planet.heightAt(a.x, a.y, a.z), h2 = planet.heightAt(c.x, c.y, c.z);
-    const g = Math.hypot(h1 - h, h2 - h) / 3;
-    return 1 - 1 / Math.sqrt(1 + g * g);
-  }
-
   // ---------------------------------------------------------------------------
   // modes and context actions
 
@@ -397,8 +361,6 @@ export class Game {
       this.hud.toast('Welcome aboard the Golden Driller', 'good', 0);
     }
     this.objectives.event('boarded');
-    // suit systems recharge inside the cockpit
-    this.inv.suit.hazard = Math.max(this.inv.suit.hazard, 100);
   }
 
   // How far the landed ship is from you on foot, or null if it is not on this planet
@@ -414,51 +376,30 @@ export class Game {
     const player = this.player;
     const planet = player.planet;
     if (this.shipDistance() == null || ship.state !== 'landed') return 'unavailable';
-    if (this.inv.fuel.launch < 25) return 'fuel';
-    const pLocal = player.pos;
-    const up = pLocal.clone().normalize();
+    const up = player.pos.clone().normalize();
     const fwd = player.forward.clone().addScaledVector(up, -player.forward.dot(up)).normalize();
-    const side = new THREE.Vector3().crossVectors(fwd, up);
-    let site = null;
-    const cand = new THREE.Vector3();
-    outer: for (const dist of [15, 22, 30, 40, 55, 70]) {
-      for (let a = 0; a < 12; a++) {
-        const ang = (a % 2 ? 1 : -1) * Math.ceil(a / 2) * 0.5;
-        cand.copy(pLocal).addScaledVector(fwd, Math.cos(ang) * dist).addScaledVector(side, Math.sin(ang) * dist).normalize();
-        const h = planet.sampler.height(cand.x, cand.y, cand.z);
-        if (planet.params.liquid && h < 1) continue;
-        if (this._slopeAt(planet, cand, h) > 0.2) continue;
-        site = cand.clone();
-        break outer;
-      }
-    }
-    if (!site) return 'nosite';
-    const r = planet.surfaceRadius(site.x, site.y, site.z);
-    const toPos = site.clone().multiplyScalar(r + 2.3).add(planet.pos);
-    // land side on to you so you see the whole ship
-    const travel = toPos.clone().sub(ship.pos);
-    let face = travel.addScaledVector(site, -travel.dot(site));
-    if (face.lengthSq() < 1) face = side.clone();
-    face.normalize();
-    const x = new THREE.Vector3().crossVectors(site, face).normalize();
-    _m.makeBasis(x, site, face);
-    const toQuat = new THREE.Quaternion().setFromRotationMatrix(_m);
-    const dist = ship.pos.distanceTo(toPos);
+    // aim for a spot a short walk in front of you
+    const origin = player.pos.clone().addScaledVector(fwd, 16);
+    const toShip = ship.pos.clone().sub(planet.pos).sub(player.pos);
+    const heading = toShip.lengthSq() > 1 ? toShip.negate() : fwd.clone();
+    const pose = ship.findLandingSite(planet, origin, heading, [0, 8, 16, 26, 40, 60]);
+    if (!pose) return 'nosite';
+    const dist = ship.pos.distanceTo(pose.pos);
     ship.model.gear.visible = false;
     ship.startAnim('summon', {
       dur: THREE.MathUtils.clamp(dist / 55, 3, 9),
       fromPos: ship.pos.clone(),
-      toPos,
+      toPos: pose.pos.clone(),
       fromQuat: ship.quat.clone(),
-      toQuat,
+      toQuat: pose.quat.clone(),
       arc: Math.min(140, 22 + dist * 0.3),
-      up: site.clone(),
+      up: pose.dir.clone(),
       onDone: () => {
         ship.state = 'landed';
         ship.speed = 0;
         ship.vel.set(0, 0, 0);
         ship.model.gear.visible = true;
-        this.surface?.exclude(toPos.clone().sub(planet.pos), 13);
+        this.surface?.exclude(pose.pos.clone().sub(planet.pos), 13);
         this.hud.toast('Your ship has landed nearby', 'good');
         this.save();
       },
@@ -470,18 +411,6 @@ export class Game {
   }
 
   tryLaunch() {
-    const inv = this.inv;
-    if (inv.fuel.launch < 25) {
-      if (inv.refuel('launch') === 'ok') {
-        this.hud.toast('Launch thrusters refueled (-20 Di-hydrogen)', 'res');
-        this.objectives.event('refueled');
-      } else {
-        this.hud.toast('Launch thrusters empty. Need 20 Di-hydrogen from blue crystals.', 'warn', 0);
-        this.audio.sfx('deny');
-        return;
-      }
-    }
-    inv.fuel.launch -= 25;
     const ship = this.ship;
     const planet = this.nearest;
     const up = ship.pos.clone().sub(planet.pos).normalize();
@@ -515,40 +444,21 @@ export class Game {
     const dir0 = local.clone().normalize();
     ship.axes();
     const fwdT = ship.forward.clone().addScaledVector(dir0, -ship.forward.dot(dir0)).normalize();
-    const sideT = new THREE.Vector3().crossVectors(fwdT, dir0);
-    let site = null;
-    const cand = new THREE.Vector3();
-    outer: for (const dist of [18, 40, 70, 110, 160, 230]) {
-      for (let a = 0; a < 10; a++) {
-        const ang = (a / 10) * Math.PI * 2;
-        cand.copy(dir0).multiplyScalar(planet.R)
-          .addScaledVector(fwdT, Math.cos(ang) * dist + 20)
-          .addScaledVector(sideT, Math.sin(ang) * dist).normalize();
-        const h = planet.sampler.height(cand.x, cand.y, cand.z);
-        if (planet.params.liquid && h < 1) continue;
-        if (this._slopeAt(planet, cand, h) > 0.2) continue;
-        site = cand.clone();
-        break outer;
-      }
-    }
-    if (!site) {
-      this.hud.toast('No landing site here. Too wet or too steep.', 'warn');
+    // look for ground a little ahead of the nose
+    const origin = dir0.clone().multiplyScalar(planet.R).addScaledVector(fwdT, 22);
+    const pose = ship.findLandingSite(planet, origin, fwdT);
+    if (!pose) {
+      this.hud.toast('Nowhere to set down here. Try somewhere without lava.', 'warn');
       this.audio.sfx('deny');
       return;
     }
-    const r = planet.surfaceRadius(site.x, site.y, site.z);
-    const toPos = site.clone().multiplyScalar(r + 2.3).add(planet.pos);
-    const fwd = fwdT.clone().addScaledVector(site, -fwdT.dot(site)).normalize();
-    const z = fwd, y = site, x = new THREE.Vector3().crossVectors(y, z).normalize();
-    _m.makeBasis(x, y, z);
-    const toQuat = new THREE.Quaternion().setFromRotationMatrix(_m);
-    const dist = ship.pos.distanceTo(toPos);
+    const dist = ship.pos.distanceTo(pose.pos);
     ship.startAnim('land', {
       dur: THREE.MathUtils.clamp(dist / 45, 2.2, 5),
       fromPos: ship.pos.clone(),
-      toPos,
+      toPos: pose.pos.clone(),
       fromQuat: ship.quat.clone(),
-      toQuat,
+      toQuat: pose.quat.clone(),
       onDone: () => {
         ship.state = 'landed';
         ship.speed = 0;
@@ -611,7 +521,6 @@ export class Game {
     this.ship.state = 'docked';
     this.ship.speed = 0;
     this.ship.vel.set(0, 0, 0);
-    this.inv.ship.shield = 100;
     this.objectives.event('docked');
     this.menus.openStation();
     this.fade(0, 0.8);
@@ -669,7 +578,6 @@ export class Game {
   }
 
   damageShip(n) {
-    this.inv.ship.shield = Math.max(0, this.inv.ship.shield - n);
     this.hud.setVignette('hurt');
     clearTimeout(this._vigT);
     this._vigT = setTimeout(() => this.hud.setVignette(null), 350);
@@ -688,12 +596,10 @@ export class Game {
   blackout(cause) {
     this.respawning = true;
     this.fade(1, 0.8);
-    this.hud.toast(cause === 'hazard' ? 'Hazard protection failed. You blacked out.' : 'You blacked out.', 'warn', 0);
+    this.hud.toast(cause === 'lava' ? 'Too close to the lava. You blacked out.' : 'You blacked out.', 'warn', 0);
     setTimeout(() => {
       const s = this.inv.suit;
       s.health = 100;
-      s.life = Math.max(s.life, 60);
-      s.hazard = Math.max(s.hazard, 60);
       const planet = this.ship.landedPlanet || this.nearest;
       if (this.ship.state === 'landed' && planet) this._exitShipTo(planet);
       this.fade(0, 1.2);
@@ -705,14 +611,14 @@ export class Game {
   // ---------------------------------------------------------------------------
   // warp
 
+  // Warps are free and work from anywhere as long as you are in your ship
   startWarp(star) {
-    const inv = this.inv;
-    if (inv.warpCells < 1) {
-      this.hud.toast('No Warp Cells. Craft one from the inventory.', 'warn', 0);
-      return false;
-    }
-    inv.warpCells--;
+    if (this.mode !== 'ship' || this.warping) return false;
     this.map.close();
+    this.menus.close();
+    this.ship.anim = null;
+    this.ship.landedPlanet = null;
+    this.ship.model.gear.visible = false;
     this._setMode('warp');
     this.hud.show(false);
     this.warping = { t: 0, star, loaded: false };
@@ -792,7 +698,6 @@ export class Game {
     this.ship.state = 'flying';
     this._setMode('ship');
     this.snapCamera();
-    this.inv.warpCells += 2;
     this.fade(1, 0.01, true);
     setTimeout(() => this.fade(0, 2, true), 60);
     this.hud.setLocation('A New Galaxy', 'Tulsa Prime, again');
@@ -938,7 +843,6 @@ export class Game {
       if (pressed.has('pulse')) {
         if (ship.pulseOn) { ship.pulseOn = false; this.audio.pulseStop(); }
         else if (!this.pulseAllowed) this.hud.toast(stDist < 3000 ? 'Too close to the station for the pulse drive' : 'Too close to a planet for the pulse drive', 'warn');
-        else if (this.inv.fuel.pulse <= 0) this.hud.toast('Pulse fuel empty. Shoot asteroids for Tritium.', 'warn');
         else { ship.pulseOn = true; this.audio.pulseStart(); this.objectives.event('pulse'); }
       }
       const canLand = planet && ship.altitude < 170 && !ship.pulseOn;
@@ -959,10 +863,6 @@ export class Game {
       const throttleUp = input.keys.has('KeyW') || input.keys.has('Space') || (input.throttleTouched && input.throttle > 0.3);
       if (pressed.has('interact2') || throttleUp) { input.throttleTouched = false; this.tryLaunch(); }
       input.consumeLook();
-      // recharge suit inside the ship
-      const s = this.inv.suit;
-      s.hazard = Math.min(100, s.hazard + dt * 15);
-      s.life = Math.min(100, s.life + dt * 6);
     } else {
       this.hud.setContext(null);
       this.hud.setContext2(null);
@@ -1001,7 +901,10 @@ export class Game {
       const g = planet.surfaceRadius(_v2.x, _v2.y, _v2.z) + 1.8;
       if (len < g) cam.position.copy(_v2).multiplyScalar(g).add(planet.pos);
     }
-    const target = _v3.copy(ship.pos).addScaledVector(ship.forward, 14).addScaledVector(ship.up, 1.6);
+    // parked: look at the ship itself so it sits above the Launch and Exit buttons
+    const target = ship.state === 'landed'
+      ? _v3.copy(ship.pos).addScaledVector(ship.forward, 2).addScaledVector(ship.up, -1.2)
+      : _v3.copy(ship.pos).addScaledVector(ship.forward, 14).addScaledVector(ship.up, 1.6);
     _m.lookAt(cam.position, target, ship.up);
     _q.setFromRotationMatrix(_m);
     if (!this.camQuatInit) { cam.quaternion.copy(_q); this.camQuatInit = true; }
@@ -1053,29 +956,10 @@ export class Game {
       this.particles.burst(at, [0.5, 0.75, 1.0], 2, 3, 0.35, 0.5, down);
     }
 
-    // suit systems
-    const inv = this.inv;
-    const s = inv.suit;
-    const p = planet.params;
-    const hz = p.hazard ? p.hazardLevel : 0;
-    // day heat and night cold swing the hazard a little
-    const sunUp = player.up.dot(G.uSunDir.value);
-    let drain = 0;
-    if (p.hazard) {
-      const swing = p.hazard.type === 'heat' ? 0.6 + 0.6 * Math.max(0, sunUp) : p.hazard.type === 'cold' ? 0.6 + 0.6 * Math.max(0, -sunUp) : 1;
-      drain = hz * 1.5 * swing * (1 - inv.upgrades.hazard * 0.22);
-    }
-    if (player.inLiquid === 'acid') drain += 5;
-    if (drain > 0) s.hazard = Math.max(0, s.hazard - drain * dt);
-    else s.hazard = Math.min(100, s.hazard + dt * 2);
-    s.life = Math.max(0, s.life - dt * 0.42);
+    // no life support or hazard meters: only lava (and big falls) can hurt you
+    const s = this.inv.suit;
     if (player.inLiquid === 'lava') this.hurtPlayer(dt * 45, 'lava');
-    if (s.hazard <= 0 && p.hazard) this.hurtPlayer(dt * 6, 'hazard');
-    if (s.life <= 0) this.hurtPlayer(dt * 5, 'oxygen');
-    if (s.hazard > 0 && s.life > 0) s.health = Math.min(100, s.health + dt * 1.5);
-    this.hud.setVignette(this.hud.vignette.classList.contains('hurt') ? 'hurt' : s.hazard < 25 && p.hazard ? 'hazard' : null);
-    if (s.life < 20 && s.life > 0) this.hud.toast('Life support low. Mine red Oxygen plants and refuel it in the inventory.', 'warn', 15000);
-    if (p.hazard && s.hazard < 20 && s.hazard > 0) this.hud.toast(`${HAZARD_LABEL[p.hazard.type]}: protection low. Sodium (yellow plants) recharges it.`, 'warn', 15000);
+    else s.health = Math.min(100, s.health + dt * 4);
 
     // first time on a planet on foot counts as a discovery
     this.discoverPlanet(planet);
@@ -1154,10 +1038,6 @@ export class Game {
         this.surface = new Surface(this, nearest, this.quality);
         this.fauna = new Fauna(this, nearest, this.quality);
         if (this.ship.state === 'landed' && this.ship.landedPlanet === nearest) this.surface.exclude(this.ship.pos.clone().sub(nearest.pos), 13);
-        if (this.pendingCrashCrystals && nearest === this.planets[0]) {
-          this.pendingCrashCrystals = false;
-          this._placeCrashCrystals(nearest);
-        }
       }
     } else if (this.surface && (focusAlt > 1400 || this.surface.planet !== nearest)) {
       this.disposeSurface();
@@ -1201,42 +1081,16 @@ export class Game {
     this.traffic?.update(dt, cam.position);
   }
 
-  _placeCrashCrystals(planet) {
-    const ship = this.ship;
-    const local = ship.pos.clone().sub(planet.pos);
-    const up = local.clone().normalize();
-    ship.axes();
-    const f = ship.forward.clone().addScaledVector(up, -ship.forward.dot(up)).normalize();
-    const r = new THREE.Vector3().crossVectors(f, up);
-    const spots = [[16, 10], [24, -14], [-18, 20], [30, 26], [-10, -26]];
-    for (const [a, b] of spots) {
-      const p = local.clone().addScaledVector(f, a).addScaledVector(r, b);
-      this.surface.addExtra('crystal', p, 1.1);
-    }
-    this.surface.addExtra('oxyplant', local.clone().addScaledVector(f, -12).addScaledVector(r, 9), 1);
-    this.surface.addExtra('boulder', local.clone().addScaledVector(f, -22).addScaledVector(r, -12), 1);
-  }
-
   _updateHud(dt) {
     const inv = this.inv;
     const hud = this.hud;
     if (this.mode === 'foot') {
       const s = inv.suit;
-      const bars = [
-        { id: 'hp', label: 'HP', value: s.health / 100, color: '#f5f0e6' },
-        { id: 'life', label: 'O2', value: s.life / 100, color: '#ff7b9a' },
-      ];
-      const p = this.player.planet.params;
-      if (p.hazard) bars.push({ id: 'hz', label: p.hazard.type === 'heat' ? 'HOT' : p.hazard.type === 'cold' ? 'ICE' : p.hazard.type === 'toxic' ? 'TOX' : 'RAD', value: s.hazard / 100, color: '#ffb547' });
-      bars.push({ id: 'jet', label: 'JET', value: s.jet / 100, color: '#7fe3ff', noLow: true });
-      hud.setBars(bars);
-    } else if (this.mode === 'ship') {
       hud.setBars([
-        { id: 'sh', label: 'SHD', value: inv.ship.shield / 100, color: '#7fe3ff' },
-        { id: 'lf', label: 'LCH', value: inv.fuel.launch / 100, color: '#5fb2ff' },
-        { id: 'pf', label: 'PLS', value: inv.fuel.pulse / 100, color: '#a6f0ff' },
-        { id: 'bst', label: 'BST', value: this.ship.boostEnergy, color: '#ffb547', noLow: true },
+        { id: 'hp', label: 'HP', value: s.health / 100, color: '#f5f0e6' },
+        { id: 'jet', label: 'JET', value: s.jet / 100, color: '#7fe3ff', noLow: true },
       ]);
+    } else if (this.mode === 'ship') {
       const ship = this.ship;
       let altText = '';
       if (this.nearest && ship.altitude < 20000) altText = `${this.nearest.params.name}  alt ${Math.round(ship.altitude)}`;

@@ -1,7 +1,7 @@
 // Panels: inventory, space station, pause and settings, and the ending.
-import { RESOURCES, UPGRADES, RECIPES, REFUEL } from '../game/inventory.js';
+import { RESOURCES, UPGRADES } from '../game/inventory.js';
 import { distanceToCore } from '../world/universe.js';
-import { BIOMES, HAZARD_LABEL } from '../world/planetgen.js';
+import { BIOMES } from '../world/planetgen.js';
 import { hashInts } from '../core/rng.js';
 
 const fmt = (n) => Math.round(n).toLocaleString();
@@ -90,48 +90,33 @@ export class Menus {
   _inventory() {
     const g = this.game;
     const inv = g.inv;
-    const onFoot = g.mode === 'foot';
-    const tanks = onFoot ? ['life', 'hazard', 'launch', 'shield'] : ['launch', 'pulse', 'shield', 'life', 'hazard'];
-    const rows = tanks.map((t) => {
-      const r = REFUEL[t];
-      const cur = inv.tank(t);
-      const ok = inv.res[r.res] >= r.amount && cur < 100;
-      return `<div class="row"><div class="info">${r.label} <span style="color:var(--amber)">${Math.round(cur)}%</span>
-        <small>${r.amount} ${RESOURCES[r.res].name} for +${r.gain}%</small></div>
-        <button data-act="refuel" data-arg="${t}" ${ok ? '' : 'disabled'}>${cur >= 100 ? 'Full' : 'Refuel'}</button></div>`;
-    }).join('');
-    const rec = RECIPES.warpCell;
-    const need = Object.entries(rec.needs).map(([k, v]) => `${v} ${RESOURCES[k].name}`).join(', ');
-    const canCraft = inv.has(rec.needs);
     const star = g.star;
     const planet = g.mode === 'foot' ? g.player.planet : g.nearest;
     let where = '';
     if (planet && g.focusAlt < 3000) {
       const p = planet.params;
-      where = `<div class="section"><h3>${p.name}</h3><div class="muted">${BIOMES[p.biome].label} world. ${p.hazard ? `${HAZARD_LABEL[p.hazard.type]} (${Math.round(p.hazard.level * 100)}%).` : 'No hazards.'} ${p.atmo ? '' : 'No atmosphere.'} ${p.liquid ? `Seas of ${p.liquid}.` : ''}</div></div>`;
+      const bits = [`${BIOMES[p.biome].label} world.`];
+      if (!p.atmo) bits.push('No atmosphere.');
+      if (p.liquid) bits.push(`Seas of ${p.liquid}.`);
+      if (p.ring) bits.push('Ringed.');
+      where = `<div class="section"><h3>${p.name}</h3><div class="muted">${bits.join(' ')}</div></div>`;
     }
     const disc = g.discovered;
     const shipD = g.shipDistance();
     let shipRow = '';
     if (shipD != null) {
-      const ok = g.ship.state === 'landed' && g.inv.fuel.launch >= 25;
-      const note = g.ship.state === 'summoning' ? 'On its way to you'
-        : g.inv.fuel.launch < 25 ? 'Needs 25% launch fuel to fly to you. Refuel it below.'
-          : 'It flies over and lands next to you';
+      const summoning = g.ship.state === 'summoning';
+      const note = summoning ? 'On its way to you' : 'It flies over and lands next to you';
       shipRow = `<div class="section"><h3>Your ship</h3><div class="row"><div class="info">Golden Driller, ${fmt(shipD)} u away<small>${note}</small></div>
-        <button data-act="callship" ${ok && shipD > 25 ? '' : 'disabled'}>${shipD <= 25 ? 'Nearby' : 'Call ship'}</button></div></div>`;
+        <button data-act="callship" ${!summoning && shipD > 25 ? '' : 'disabled'}>${shipD <= 25 ? 'Nearby' : 'Call ship'}</button></div></div>`;
     }
     return `
-      <div class="row" style="border:none;padding-top:0"><div class="info">Units<small>Your ship: the Golden Driller</small></div><div class="units">${fmt(inv.units)} u</div></div>
-      <div class="row"><div class="info">Warp Cells<small>One per hyperspace jump</small></div><div class="units" style="color:var(--cyan)">${inv.warpCells}</div></div>
+      <div class="row" style="border:none;padding-top:0"><div class="info">Units<small>Sell what you mine at any space station</small></div><div class="units">${fmt(inv.units)} u</div></div>
       ${shipRow}
-      <div class="section"><h3>Resources</h3>${this._resGrid()}</div>
-      <div class="section"><h3>Refuel and recharge</h3>${rows}</div>
-      <div class="section"><h3>Craft</h3>
-        <div class="row"><div class="info">${rec.name}<small>${need}</small></div><button data-act="craft" ${canCraft ? '' : 'disabled'}>Craft</button></div>
-      </div>
+      <div class="section"><h3>Cargo</h3>${this._resGrid()}</div>
       ${where}
       <div class="section"><h3>Journey</h3><div class="muted">
+        Fuel and warps are unlimited. Go anywhere.<br>
         ${star ? `${star.name}, ${fmt(distanceToCore(star))} ly from the Center of the Universe.<br>` : ''}
         ${plural(Object.keys(disc.systems).length, 'system')}, ${plural(Object.keys(disc.planets).length, 'planet')}, ${fmt(Object.keys(disc.species).length)} species discovered. ${plural(g.jumps, 'jump')}.
       </div></div>`;
@@ -147,7 +132,7 @@ export class Menus {
   _station() {
     const g = this.game;
     const inv = g.inv;
-    const tabs = ['trade', 'shop', 'upgrades'];
+    const tabs = ['trade', 'upgrades'];
     let html = `<div class="row" style="border:none;padding-top:0"><div class="info">Welcome, traveler<small>${g.system.name} system</small></div><div class="units">${fmt(inv.units)} u</div></div>
       <div class="tabs">${tabs.map((t) => `<button data-act="tab" data-arg="${t}" class="${this.tab === t ? 'on' : ''}">${t}</button>`).join('')}</div>`;
     if (this.tab === 'trade') {
@@ -157,16 +142,6 @@ export class Menus {
         return `<div class="row"><div class="info"><span style="color:${r.color}">${r.sym}</span> ${r.name} &times; ${n}<small>${p} u each</small></div>
           <div style="display:flex;gap:6px"><button data-act="sell" data-arg="${key}:10" ${n >= 10 ? '' : 'disabled'}>Sell 10</button><button data-act="sell" data-arg="${key}:all" ${n > 0 ? '' : 'disabled'}>All</button></div></div>`;
       }).join('');
-    } else if (this.tab === 'shop') {
-      const items = [
-        ['warpcell', 'Warp Cell', 'Powers one hyperspace jump', 1400],
-        ['dihydrogen', '40 Di-hydrogen', 'Launch thruster fuel', 520],
-        ['tritium', '75 Tritium', 'Pulse engine fuel', 480],
-        ['oxygen', '30 Oxygen', 'Life support', 420],
-        ['sodium', '30 Sodium', 'Hazard protection', 480],
-      ];
-      html += items.map(([id, name, desc, cost]) => `<div class="row"><div class="info">${name}<small>${desc}</small></div>
-        <button data-act="buy" data-arg="${id}:${cost}" ${inv.units >= cost ? '' : 'disabled'}>${fmt(cost)} u</button></div>`).join('');
     } else {
       html += Object.entries(UPGRADES).map(([key, u]) => {
         const lvl = inv.upgrades[key];
@@ -175,7 +150,6 @@ export class Menus {
         return `<div class="row"><div class="info">${u.name} <span style="color:var(--amber)">${'&#9670;'.repeat(lvl)}${'&#9671;'.repeat(u.max - lvl)}</span><small>${u.desc}</small></div>
           <button data-act="upgrade" data-arg="${key}" ${!maxed && inv.units >= cost ? '' : 'disabled'}>${maxed ? 'Max' : `${fmt(cost)} u`}</button></div>`;
       }).join('');
-      html += `<div class="muted" style="margin-top:8px">Hyperdrive range now ${fmt(inv.jumpRange)} ly.</div>`;
     }
     html += `<div class="section" style="display:grid;gap:8px"><button class="primary-btn" data-act="undock">Launch</button></div>`;
     return html;
@@ -210,12 +184,12 @@ export class Menus {
   _help() {
     const touch = this.game.isTouch;
     return `<div class="muted" style="display:grid;gap:10px">
-      <div><b style="color:var(--ink)">On foot.</b> ${touch ? 'Left thumb moves, drag the right side to look.' : 'WASD to move, mouse to look.'} Hold <b>Mine</b> to cut resources with your beam, tap <b>Scan</b> to reveal deposits and discover new species, hold <b>Jet</b> to fly with your jetpack.</div>
-      <div><b style="color:var(--ink)">Finding your ship.</b> A new journey starts right beside it. When you wander off, the gold SHIP marker shows where it is and how far, and sticks to the edge of the screen with an arrow when it is behind you. Once it has launch fuel you can call it from the inventory and it lands next to you.</div>
-      <div><b style="color:var(--ink)">Your ship.</b> ${touch ? 'Left thumb steers. The slider on the right is your throttle.' : 'Mouse or arrow keys steer, W and S set throttle.'} <b>Boost</b> for speed, <b>Fire</b> to shoot asteroids for Tritium. Get low over the ground and tap <b>Land</b>.</div>
-      <div><b style="color:var(--ink)">Space.</b> <b>Pulse</b> jumps you across a system in seconds. Fly up to the station's glowing slot and tap <b>Dock</b> to trade and buy upgrades.</div>
-      <div><b style="color:var(--ink)">The galaxy.</b> Craft a Warp Cell, open the map, pick a star in range, and warp. Every jump toward the core brings you closer to the Center of the Universe.</div>
-      <div><b style="color:var(--ink)">Staying alive.</b> Oxygen (red flowers) refills life support. Sodium (yellow plants) recharges hazard protection on hot, frozen, toxic, or radioactive worlds. Your cockpit recharges both.</div>
+      <div><b style="color:var(--ink)">Fly anywhere.</b> Fuel is unlimited and warps are free. You start in your ship: tap <b>Launch</b> and go.</div>
+      <div><b style="color:var(--ink)">Your ship.</b> ${touch ? 'Left thumb steers. The slider on the right is your throttle, and you can also drag the right side to steer.' : 'Mouse or arrow keys steer, W and S set throttle.'} Hold <b>Boost</b> for speed and <b>Fire</b> to break asteroids. Get low over any planet and tap <b>Land</b>.</div>
+      <div><b style="color:var(--ink)">Space.</b> Tap <b>Pulse</b> to race across a system in seconds. Fly up to a station's glowing slot and tap <b>Dock</b> to sell what you have found and buy upgrades.</div>
+      <div><b style="color:var(--ink)">The galaxy.</b> Open the map, tap any star, and warp. You can warp from anywhere while you are in your ship, even sitting on the ground. The Center of the Universe is out there if you want a destination.</div>
+      <div><b style="color:var(--ink)">On foot.</b> ${touch ? 'Left thumb moves, drag the right side to look.' : 'WASD to move, mouse to look.'} Hold <b>Jet</b> to fly with your jetpack, hold <b>Mine</b> to cut resources to sell, and tap <b>Scan</b> to discover plants and creatures for units.</div>
+      <div><b style="color:var(--ink)">Finding your ship.</b> Follow the gold SHIP marker. It sticks to the edge of the screen with an arrow when the ship is behind you. You can also call the ship from the inventory and it lands next to you.</div>
     </div>
     <div class="section"><button class="ghost-btn" data-act="back">Back</button></div>`;
   }
@@ -236,27 +210,12 @@ export class Menus {
     const g = this.game;
     const inv = g.inv;
     switch (act) {
-      case 'refuel': {
-        const r = inv.refuel(arg);
-        if (r === 'ok') {
-          g.audio.sfx('collect');
-          if (arg === 'launch') g.objectives.event('refueled');
-        }
-        break;
-      }
       case 'callship': {
         const r = g.callShip();
         if (r === 'ok') { this.close(); return; }
-        if (r === 'fuel') g.hud.toast('Your ship needs 25% launch fuel to fly to you', 'warn');
-        else if (r === 'nosite') g.hud.toast('No flat, dry ground nearby for it to land on', 'warn');
+        if (r === 'nosite') g.hud.toast('Nowhere nearby for it to land', 'warn');
         break;
       }
-      case 'craft':
-        if (inv.craftWarpCell()) {
-          g.audio.sfx('objective');
-          g.hud.toast('Warp Cell crafted', 'good');
-        }
-        break;
       case 'tab':
         this.tab = arg;
         break;
@@ -265,19 +224,6 @@ export class Menus {
         const n = amt === 'all' ? inv.res[key] : Math.min(10, inv.res[key]);
         inv.res[key] -= n;
         inv.units += n * this._price(key);
-        g.audio.sfx('collect');
-        break;
-      }
-      case 'buy': {
-        const [id, costS] = arg.split(':');
-        const cost = +costS;
-        if (inv.units < cost) break;
-        inv.units -= cost;
-        if (id === 'warpcell') inv.warpCells++;
-        else if (id === 'dihydrogen') inv.add('dihydrogen', 40);
-        else if (id === 'tritium') inv.add('tritium', 75);
-        else if (id === 'oxygen') inv.add('oxygen', 30);
-        else if (id === 'sodium') inv.add('sodium', 30);
         g.audio.sfx('collect');
         break;
       }

@@ -120,10 +120,10 @@ export class Player {
       vy = Math.min(vy, 9 + jetLevel * 2);
       // a little forward push, like the real thing
       tangent.addScaledVector(this.forward, (my > 0 ? 7 : 2) * dt);
-      inv.suit.jet = Math.max(0, inv.suit.jet - dt * (38 - jetLevel * 7));
+      inv.suit.jet = Math.max(0, inv.suit.jet - dt * (22 - jetLevel * 4));
       this.jetting = true;
     } else if (this.grounded || this.swimming) {
-      inv.suit.jet = Math.min(100, inv.suit.jet + dt * 30);
+      inv.suit.jet = Math.min(100, inv.suit.jet + dt * 45);
     }
 
     if (this.swimming) {
