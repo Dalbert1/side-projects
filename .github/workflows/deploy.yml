@@ -73,7 +73,8 @@ jobs:
 
       # ── Not deployed (source kept in repo, intentionally left off GitHub Pages):
       #    partyplug, tulsahomehelp, heelerconstruction, haughhoney, handyrandys,
-      #    resume-web-app, austinalbert, ww3electricboogaloo, games/battleship.html ──
+      #    resume-web-app, austinalbert, ww3electricboogaloo, games/battleship.html,
+      #    zuk-sim (personal OSRS trainer, open zuk-sim/index.html locally) ──
 
       # ── Merge all builds into one deploy folder ──
       - name: Assemble site

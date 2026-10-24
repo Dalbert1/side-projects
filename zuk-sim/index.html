@@ -1,0 +1,1489 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow">
+<title>Zuk Sim</title>
+<style>
+  @font-face {
+    font-family: "RuneScape";
+    src: url("https://raw.githubusercontent.com/Supalosa/InfernoTrainer/16d97f975bd09790552dc176db349dcf4f02cfbf/src/assets/fonts/RuneScape-Plain-12.woff") format("woff");
+  }
+  :root {
+    --bg: #0d0a08;
+    --panel: #3e3529;
+    --panel-dark: #2b241b;
+    --panel-edge: #1a1510;
+    --gold: #ff981f;
+    --yellow: #ffff00;
+    --text: #e6dcc6;
+    --dim: #a3967c;
+    --green: #00ff00;
+    --red: #ff3030;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: "RuneScape", "Trebuchet MS", system-ui, sans-serif;
+    font-size: 15px;
+    overflow: hidden;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+  #app { display: flex; height: 100vh; width: 100vw; }
+  #stage { flex: 1; position: relative; min-width: 0; display: flex; align-items: center; justify-content: center; }
+  canvas#game { display: block; image-rendering: pixelated; cursor: pointer; touch-action: none; }
+  #side {
+    width: 250px; flex-shrink: 0; background: var(--panel-dark);
+    border-left: 2px solid var(--panel-edge); display: flex; flex-direction: column;
+    padding: 8px; gap: 8px; overflow-y: auto;
+  }
+  #side > * { flex-shrink: 0; }
+  .box { background: var(--panel); border: 2px solid var(--panel-edge); border-radius: 3px; padding: 6px; }
+  .orbs { display: flex; gap: 8px; justify-content: space-between; }
+  .orb {
+    flex: 1; display: flex; align-items: center; gap: 6px; padding: 4px 6px;
+    background: #1d1812; border: 2px solid var(--panel-edge); border-radius: 18px; cursor: pointer;
+  }
+  .orb img { width: 22px; height: 22px; }
+  .orb .num { font-size: 18px; color: var(--green); text-shadow: 1px 1px 0 #000; }
+  .orb.active { box-shadow: 0 0 0 2px #7fd3ff inset; }
+  .tabs { display: flex; gap: 4px; }
+  .tab {
+    flex: 1; height: 38px; background: var(--panel); border: 2px solid var(--panel-edge); border-radius: 3px;
+    display: flex; align-items: center; justify-content: center; cursor: pointer; color: var(--dim);
+  }
+  .tab.on { background: #6b2b1f; color: var(--text); }
+  .tab img { max-width: 30px; max-height: 32px; }
+  .panel { position: relative; width: 208px; height: 279px; margin: 0 auto; background: #3a3127; border: 2px solid var(--panel-edge); }
+  .panel-bg { position: absolute; inset: 0; width: 204px; height: 275px; }
+  #inv { display: grid; grid-template-columns: repeat(4, 42px); grid-auto-rows: 36px; gap: 0 4px; padding: 6px 12px; position: relative; }
+  .slot { width: 42px; height: 36px; display: flex; align-items: center; justify-content: center; cursor: pointer; position: relative; }
+  .slot img { max-width: 34px; max-height: 32px; }
+  .slot .lbl { font-size: 11px; color: var(--yellow); text-align: center; line-height: 1; text-shadow: 1px 1px 0 #000; }
+  .slot:active { filter: brightness(0.75); }
+  .pray-hit { position: absolute; width: 35px; height: 35px; border-radius: 50%; cursor: pointer; }
+  .pray-hit.lit { background: rgba(209, 187, 119, 0.45); }
+  .pray-hit.off { background: rgba(0, 0, 0, 0.55); cursor: default; }
+  .pray-fallback { position: absolute; font-size: 10px; text-align: center; width: 35px; line-height: 1; color: var(--text); pointer-events: none; padding-top: 10px; }
+  /* Covers the static points text baked into the prayer book image with the live value. */
+  .pray-pts { position: absolute; left: 88px; width: 66px; top: 243px; height: 18px; line-height: 18px; background: rgb(62, 53, 41); color: var(--gold); text-shadow: 1px 1px 0 #000; }
+  #equip { padding: 6px; font-size: 13px; }
+  #equip .row { display: flex; align-items: center; gap: 6px; height: 22px; }
+  #equip img { width: 20px; height: 20px; object-fit: contain; }
+  #equip .stats { margin-top: 6px; color: var(--gold); line-height: 1.35; }
+  .info { font-size: 14px; line-height: 1.45; }
+  .info b { color: var(--gold); font-weight: normal; }
+  .btns { display: flex; flex-wrap: wrap; gap: 4px; }
+  button, select {
+    font: inherit; font-size: 14px; color: var(--text); background: #5a4a36; border: 2px solid var(--panel-edge);
+    border-radius: 3px; padding: 3px 8px; cursor: pointer;
+  }
+  button:hover { background: #6d5a42; }
+  label.chk { display: flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer; }
+  #log { font-size: 13px; height: 110px; overflow-y: auto; color: var(--dim); line-height: 1.3; }
+  #log .hl { color: var(--gold); }
+  #log .bad { color: var(--red); }
+  #overlay {
+    position: absolute; inset: 0; display: none; align-items: center; justify-content: center;
+    background: rgba(0, 0, 0, 0.55); z-index: 5;
+  }
+  #overlay .card { background: var(--panel); border: 2px solid var(--panel-edge); padding: 18px 22px; text-align: center; max-width: 340px; }
+  #overlay h2 { font-weight: normal; color: var(--gold); font-size: 24px; margin-bottom: 8px; }
+  #overlay p { margin-bottom: 12px; line-height: 1.4; }
+  .keys { font-size: 12px; color: var(--dim); line-height: 1.4; }
+  @media (max-width: 760px) {
+    body { overflow: auto; }
+    #app { flex-direction: column; height: auto; }
+    #stage { height: 62vh; flex: none; }
+    #side { width: 100%; border-left: none; border-top: 2px solid var(--panel-edge); }
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="stage">
+    <canvas id="game"></canvas>
+    <div id="overlay"><div class="card"><h2 id="ovTitle"></h2><p id="ovText"></p><button id="ovBtn">Restart</button></div></div>
+  </div>
+  <div id="side">
+    <div class="orbs">
+      <div class="orb" id="hpOrb" title="Hitpoints"><img data-src="interface/map_hitpoint_icon.png" alt=""><span class="num" id="hpNum">99</span></div>
+      <div class="orb" id="prayOrb" title="Quick prayers (Space)"><img data-src="interface/map_prayer_icon.png" alt=""><span class="num" id="prayNum">99</span></div>
+    </div>
+    <div class="tabs">
+      <div class="tab" data-tab="equip" title="Equipment (3)"><img data-src="controlTabs/equipment.png" alt="Equip"></div>
+      <div class="tab on" data-tab="inv" title="Inventory (1)"><img data-src="controlTabs/inventory.png" alt="Inv"></div>
+      <div class="tab" data-tab="pray" title="Prayer (2)"><img data-src="controlTabs/prayer.png" alt="Pray"></div>
+    </div>
+    <div class="panel" id="panel-inv"><img class="panel-bg" data-src="panels/inventory.png" alt=""><div id="inv"></div></div>
+    <div class="panel" id="panel-pray" style="display:none"><img class="panel-bg" data-src="panels/prayer.png" alt=""><div id="prayGrid"></div><div class="pray-pts" id="prayPts"></div></div>
+    <div class="panel" id="panel-equip" style="display:none"><div id="equip"></div></div>
+    <div class="box info" id="info"></div>
+    <div class="box">
+      <div class="btns" style="margin-bottom:6px">
+        <button id="restartBtn">Restart</button>
+        <button id="pauseBtn">Pause</button>
+        <select id="phaseSel" title="Start phase">
+          <option value="full">Full fight</option>
+          <option value="jad">Jad phase</option>
+          <option value="healers">Healer phase</option>
+        </select>
+      </div>
+      <label class="chk"><input type="checkbox" id="optTimer" checked> Show set timer</label>
+      <label class="chk"><input type="checkbox" id="optSafe"> Show shield safe tiles</label>
+      <label class="chk"><input type="checkbox" id="optTrue" checked> Show true tile</label>
+      <label class="chk"><input type="checkbox" id="optJad"> Label Jad attack style</label>
+      <label class="chk"><input type="checkbox" id="optSound" checked> Sound</label>
+      <label class="chk"><input type="checkbox" id="optBoost" checked> Start boosted (bastion)</label>
+      <label class="chk">Tick speed
+        <select id="optSpeed"><option value="600">600ms (real)</option><option value="900">900ms</option><option value="1200">1200ms</option><option value="300">300ms</option></select>
+      </label>
+    </div>
+    <div class="box"><div id="log"></div></div>
+    <div class="keys">Click to walk, click an NPC to attack. Q/W/E: protect magic/missiles/melee. R: Rigour. Space: quick prayers. 1/2/3: inventory/prayer/equipment. P: pause.</div>
+  </div>
+</div>
+
+<script>
+"use strict";
+
+// ---------------------------------------------------------------------------
+// Assets: sprites and sounds are loaded at runtime from the open source
+// InfernoTrainer repo (pinned commit). Nothing is bundled here; every draw
+// call has a shape fallback so the sim still works offline.
+// ---------------------------------------------------------------------------
+const ASSET_ROOT = "https://raw.githubusercontent.com/Supalosa/InfernoTrainer/16d97f975bd09790552dc176db349dcf4f02cfbf/src/";
+const INF = "content/inferno/assets/";
+
+const images = {};
+function loadImage(key, path) {
+  const img = new Image();
+  img.onload = () => { img.ok = true; };
+  img.src = ASSET_ROOT + path;
+  images[key] = img;
+  return img;
+}
+function imgOk(key) { const i = images[key]; return i && i.ok && i.naturalWidth > 0; }
+
+loadImage("zuk", INF + "images/TzKal-Zuk.png");
+loadImage("zek", INF + "images/mager.png");
+loadImage("xil", INF + "images/ranger.png");
+loadImage("mejjak", INF + "images/Jal-MejJak.png");
+loadImage("hurkot", INF + "images/Yt-HurKot.png");
+loadImage("zukball", INF + "images/zuk_attack.png");
+const JAD_MAGE_FRAMES = [], JAD_RANGE_FRAMES = [];
+for (let i = 1; i <= 32; i++) JAD_MAGE_FRAMES.push(loadImage("jadm" + i, INF + "images/jad/jad_mage_" + i + ".png"));
+for (let i = 1; i <= 13; i++) JAD_RANGE_FRAMES.push(loadImage("jadr" + i, INF + "images/jad/jad_range_" + i + ".png"));
+const JAD_FRAMES_PER_TICK = 6;
+loadImage("splatDmg", "assets/images/hitsplats/damage.png");
+loadImage("splatMiss", "assets/images/hitsplats/miss.png");
+loadImage("splatHeal", "assets/images/hitsplats/heal.png");
+loadImage("overMage", "assets/images/prayers/mageOver.png");
+loadImage("overRange", "assets/images/prayers/rangeOver.png");
+loadImage("overMelee", "assets/images/prayers/meleeOver.png");
+
+const SOUND_FILES = {
+  bow: "assets/sounds/crystal_bow_1352.ogg",
+  zuk: INF + "sounds/fireblast_cast_and_fire_155.ogg",
+  jadMage: INF + "sounds/firebreath_159.ogg",
+  jadMageFire: INF + "sounds/firewave_cast_and_fire_162.ogg",
+  jadRange: INF + "sounds/firewave_hit_163.ogg",
+  spark: INF + "sounds/firewave_hit_163.ogg",
+  zekXil: INF + "sounds/mage_ranger_598.ogg",
+  hit: "assets/sounds/dragon_hit_410.ogg",
+  prayOn: "assets/sounds/mageOn.ogg",
+  prayOff: "assets/sounds/mageOff.ogg",
+  drink: "assets/sounds/liquid_2401.ogg",
+};
+const sounds = {};
+for (const k in SOUND_FILES) { const a = new Audio(); a.preload = "auto"; a.src = ASSET_ROOT + SOUND_FILES[k]; sounds[k] = a; }
+function play(key, vol = 0.25) {
+  if (!opts.sound) return;
+  const base = sounds[key];
+  if (!base) return;
+  try { const a = base.cloneNode(); a.volume = vol; a.play().catch(() => {}); } catch (e) { /* audio is best effort */ }
+}
+
+// Fill every <img data-src> in the side panel; hide it if it fails so fallbacks show.
+document.querySelectorAll("img[data-src]").forEach((el) => {
+  el.onerror = () => { el.style.visibility = "hidden"; };
+  el.src = ASSET_ROOT + "assets/images/" + el.dataset.src;
+});
+
+// ---------------------------------------------------------------------------
+// Data
+// ---------------------------------------------------------------------------
+
+// Arena coordinates follow InfernoTrainer: y grows south, a unit's (x, y) is
+// its south west tile and it covers x..x+size-1, y-size+1..y.
+const ARENA = { x0: 11, x1: 39, y0: 14, y1: 43 };
+const VIEW = { x0: 8, x1: 42, y0: 0, y1: 44 };
+const SAFE_MAX_Y = 16; // Zuk fires at the player instead of the shield south of this row
+
+// Gear: the bowfa + crystal setup from the wiki's Inferno gear page.
+const EQUIPMENT = [
+  { slot: "Head", name: "Crystal helm", img: "equipment/Crystal_helm.png",
+    a: { stab: 0, slash: 0, crush: 0, magic: -10, range: 9 }, d: { stab: 12, slash: 8, crush: 14, magic: 10, range: 18 }, rstr: 0, pray: 2, cAcc: 0.05, cDmg: 0.025 },
+  { slot: "Cape", name: "Ava's assembler", img: "equipment/Avas_assembler.png",
+    a: { stab: 0, slash: 0, crush: 0, magic: 4, range: 8 }, d: { stab: 1, slash: 1, crush: 1, magic: 8, range: 2 }, rstr: 2, pray: 0 },
+  { slot: "Neck", name: "Necklace of anguish", img: "equipment/Necklace_of_anguish.png",
+    a: { stab: 0, slash: 0, crush: 0, magic: 0, range: 15 }, d: { stab: 0, slash: 0, crush: 0, magic: 0, range: 0 }, rstr: 5, pray: 2 },
+  { slot: "Ammo", name: "Holy blessing", img: "equipment/Holy_blessing.png",
+    a: { stab: 0, slash: 0, crush: 0, magic: 0, range: 0 }, d: { stab: 0, slash: 0, crush: 0, magic: 0, range: 0 }, rstr: 0, pray: 1 },
+  { slot: "Weapon", name: "Bow of faerdhinen (c)", img: "equipment/Bow_of_faerdhinen.png",
+    a: { stab: 0, slash: 0, crush: 0, magic: 0, range: 128 }, d: { stab: 0, slash: 0, crush: 0, magic: 0, range: 0 }, rstr: 106, pray: 0 },
+  { slot: "Body", name: "Crystal body", img: "equipment/Crystal_body.png",
+    a: { stab: 0, slash: 0, crush: 0, magic: -18, range: 31 }, d: { stab: 46, slash: 38, crush: 48, magic: 44, range: 68 }, rstr: 0, pray: 3, cAcc: 0.15, cDmg: 0.075 },
+  { slot: "Legs", name: "Crystal legs", img: "equipment/Crystal_legs.png",
+    a: { stab: 0, slash: 0, crush: 0, magic: -12, range: 18 }, d: { stab: 26, slash: 21, crush: 30, magic: 34, range: 38 }, rstr: 0, pray: 2, cAcc: 0.1, cDmg: 0.05 },
+  { slot: "Hands", name: "Barrows gloves", img: "equipment/Barrows_gloves.png",
+    a: { stab: 12, slash: 12, crush: 12, magic: 6, range: 12 }, d: { stab: 12, slash: 12, crush: 12, magic: 6, range: 12 }, rstr: 0, pray: 0 },
+  { slot: "Feet", name: "Pegasian boots", img: "equipment/Pegasian_boots.png",
+    a: { stab: 0, slash: 0, crush: 0, magic: -12, range: 12 }, d: { stab: 5, slash: 5, crush: 5, magic: 5, range: 5 }, rstr: 0, pray: 0 },
+  { slot: "Ring", name: "Ring of suffering (i)", img: "equipment/Ring_of_suffering_imbued.png",
+    a: { stab: 0, slash: 0, crush: 0, magic: 0, range: 0 }, d: { stab: 20, slash: 20, crush: 20, magic: 20, range: 20 }, rstr: 0, pray: 4 },
+];
+const GEAR = (() => {
+  const g = { a: { stab: 0, slash: 0, crush: 0, magic: 0, range: 0 }, d: { stab: 0, slash: 0, crush: 0, magic: 0, range: 0 }, rstr: 0, pray: 0, cAcc: 1, cDmg: 1 };
+  for (const e of EQUIPMENT) {
+    for (const k in e.a) g.a[k] += e.a[k];
+    for (const k in e.d) g.d[k] += e.d[k];
+    g.rstr += e.rstr; g.pray += e.pray;
+    g.cAcc += e.cAcc || 0; g.cDmg += e.cDmg || 0;
+  }
+  return g;
+})();
+const BOWFA_RANGE = 10;
+const BOWFA_SPEED = 4; // rapid
+
+// Prayer book, in panel order (5 per row). Only combat relevant prayers do anything.
+// drain = OSRS drain effect per tick. groups decide which prayers switch each other off.
+const PRAYERS = [
+  ["Thick Skin", 1, ["def"], 1], ["Burst of Strength", 1, ["off"], 4], ["Clarity of Thought", 1, ["off"], 7], ["Sharp Eye", 1, ["off"], 8], ["Mystic Will", 1, ["off"], 9],
+  ["Rock Skin", 6, ["def"], 10], ["Superhuman Strength", 6, ["off"], 13], ["Improved Reflexes", 6, ["off"], 16], ["Rapid Restore", 1, [], 19], ["Rapid Heal", 2, [], 22],
+  ["Protect Item", 2, [], 25], ["Hawk Eye", 6, ["off"], 26], ["Mystic Lore", 6, ["off"], 27], ["Steel Skin", 12, ["def"], 28], ["Ultimate Strength", 12, ["off"], 31],
+  ["Incredible Reflexes", 12, ["off"], 34], ["Protect from Magic", 12, ["over"], 37], ["Protect from Missiles", 12, ["over"], 40], ["Protect from Melee", 12, ["over"], 43], ["Eagle Eye", 12, ["off"], 44],
+  ["Mystic Might", 12, ["off"], 45], ["Retribution", 3, ["over"], 46], ["Redemption", 6, ["over"], 49], ["Smite", 18, ["over"], 52], ["Preserve", 2, [], 55],
+  ["Chivalry", 24, ["def", "off"], 60], ["Piety", 24, ["def", "off"], 70], ["Rigour", 24, ["def", "off"], 74], ["Augury", 24, ["def", "off"], 77],
+].map(([name, drain, groups, lvl], i) => ({ name, drain, groups, lvl, i }));
+const PRAYER_IDX = Object.fromEntries(PRAYERS.map((p) => [p.name, p.i]));
+const QUICK_PRAYERS = ["Protect from Magic", "Rigour"];
+
+const ITEMS = {
+  brew: { name: "Saradomin brew", img: (d) => "potions/Saradomin_brew_" + d + ".png", short: "Brew" },
+  restore: { name: "Super restore", img: (d) => "potions/Super_restore_" + d + ".png", short: "Rest" },
+  bastion: { name: "Bastion potion", img: (d) => "potions/Bastion_potion_" + d + ".png", short: "Bast" },
+};
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+const rnd = (n) => Math.floor(Math.random() * n); // 0..n-1
+const box = (u) => ({ x0: u.x, x1: u.x + u.size - 1, y0: u.y - u.size + 1, y1: u.y });
+function boxDist(a, b) {
+  const A = box(a), B = box(b);
+  const dx = Math.max(0, A.x0 - B.x1, B.x0 - A.x1);
+  const dy = Math.max(0, A.y0 - B.y1, B.y0 - A.y1);
+  return Math.max(dx, dy);
+}
+function overlaps(a, b) {
+  const A = box(a), B = box(b);
+  return A.x0 <= B.x1 && B.x0 <= A.x1 && A.y0 <= B.y1 && B.y0 <= A.y1;
+}
+// Melee range: touching on a side, never diagonally.
+function inMeleeRange(a, b) {
+  const A = box(a), B = box(b);
+  const xTouch = A.x1 + 1 === B.x0 || B.x1 + 1 === A.x0;
+  const yTouch = A.y1 + 1 === B.y0 || B.y1 + 1 === A.y0;
+  const xOver = A.x0 <= B.x1 && B.x0 <= A.x1;
+  const yOver = A.y0 <= B.y1 && B.y0 <= A.y1;
+  return (xTouch && yOver) || (yTouch && xOver);
+}
+function hitChance(att, def) {
+  return att > def ? 1 - (def + 2) / (2 * att + 1) : att / (2 * def + 1);
+}
+function center(u) { return { x: u.x + u.size / 2, y: u.y - u.size / 2 + 1 }; }
+function fmtTime(ticks) {
+  const s = ticks * 0.6;
+  const m = Math.floor(s / 60);
+  return m + ":" + (s - m * 60).toFixed(1).padStart(4, "0");
+}
+
+// ---------------------------------------------------------------------------
+// Options
+// ---------------------------------------------------------------------------
+const opts = { timer: true, safe: false, trueTile: true, jadLabel: false, sound: true, boost: true, speed: 600, phase: "full" };
+function readOpts() {
+  opts.timer = $("optTimer").checked;
+  opts.safe = $("optSafe").checked;
+  opts.trueTile = $("optTrue").checked;
+  opts.jadLabel = $("optJad").checked;
+  opts.sound = $("optSound").checked;
+  opts.boost = $("optBoost").checked;
+  opts.speed = parseInt($("optSpeed").value, 10);
+  opts.phase = $("phaseSel").value;
+  try { localStorage.setItem("zukSimOpts", JSON.stringify(opts)); } catch (e) { /* storage optional */ }
+}
+function $(id) { return document.getElementById(id); }
+try {
+  const saved = JSON.parse(localStorage.getItem("zukSimOpts") || "null");
+  if (saved) {
+    $("optTimer").checked = !!saved.timer; $("optSafe").checked = !!saved.safe; $("optTrue").checked = saved.trueTile !== false;
+    $("optJad").checked = !!saved.jadLabel; $("optSound").checked = saved.sound !== false; $("optBoost").checked = saved.boost !== false;
+    if (saved.speed) $("optSpeed").value = String(saved.speed);
+    if (saved.phase) $("phaseSel").value = saved.phase;
+  }
+} catch (e) { /* storage optional */ }
+readOpts();
+
+// ---------------------------------------------------------------------------
+// Game state
+// ---------------------------------------------------------------------------
+let S = null;
+
+function log(msg, cls) {
+  S.log.push({ t: S.tick, msg, cls });
+  if (S.log.length > 80) S.log.shift();
+  renderLog();
+}
+
+function makeNpc(type, x, y, extra = {}) {
+  const def = NPC_DEFS[type];
+  const n = {
+    type, name: def.name, x, y, px: x, py: y, size: def.size,
+    hp: def.hp, maxHp: def.hp, stats: def.stats, defBonus: def.defBonus,
+    attackSpeed: def.speed, range: def.range,
+    attackDelay: 0, stunned: 0, frozen: 0, age: 0,
+    aggro: null, dead: false, deathTick: 0, retaliates: true,
+    anim: null, animTick: 0, lastStyle: null, hpShownUntil: 0,
+    id: S.nextId++,
+  };
+  Object.assign(n, extra);
+  return n;
+}
+
+// Stats from the wiki / InfernoTrainer. att = attack level + bonus used for the NPC's roll.
+const NPC_DEFS = {
+  zuk: { name: "TzKal-Zuk", size: 7, hp: 1200, speed: 10, range: 99,
+    stats: { def: 260, magic: 150 }, defBonus: { range: 100, magic: 350 } },
+  shield: { name: "Ancestral Glyph", size: 5, hp: 600, speed: 0, range: 0, stats: { def: 0, magic: 0 }, defBonus: { range: 0, magic: 0 } },
+  zek: { name: "Jal-Zek", size: 4, hp: 220, speed: 4, range: 15, stats: { def: 260, magic: 300, attack: 370, range: 510 }, defBonus: { range: 0, magic: 0 } },
+  xil: { name: "Jal-Xil", size: 3, hp: 125, speed: 4, range: 15, stats: { def: 60, magic: 90, attack: 140, range: 250 }, defBonus: { range: 0, magic: 0 } },
+  jad: { name: "JalTok-Jad", size: 5, hp: 350, speed: 8, range: 15, stats: { def: 480, magic: 510, attack: 750, range: 1020 }, defBonus: { range: 0, magic: 0 } },
+  hurkot: { name: "Yt-HurKot", size: 1, hp: 90, speed: 4, range: 1, stats: { def: 100, magic: 150, attack: 165 }, defBonus: { range: 130, magic: 130 } },
+  mejjak: { name: "Jal-MejJak", size: 1, hp: 75, speed: 3, range: 99, stats: { def: 100, magic: 1 }, defBonus: { range: 0, magic: 0 } },
+};
+
+function newGame() {
+  readOpts();
+  const base = { attack: 99, strength: 99, defence: 99, ranged: 99, magic: 99, hitpoints: 99, prayer: 99 };
+  const cur = { ...base };
+  if (opts.boost) { cur.ranged = 99 + Math.floor(99 * 0.1) + 4; cur.defence = 99 + Math.floor(99 * 0.15) + 5; }
+  const inv = [];
+  inv.push({ id: "bastion", doses: 4 });
+  for (let i = 0; i < 14; i++) inv.push({ id: "brew", doses: 4 });
+  for (let i = 0; i < 13; i++) inv.push({ id: "restore", doses: 4 });
+
+  S = {
+    tick: 0, nextId: 1, npcs: [], events: [], projectiles: [], splats: [], sparks: [], clicks: [],
+    inputs: [], log: [], over: null, paused: false, startedAt: 0,
+    player: {
+      x: 25, y: 15, px: 25, py: 15, size: 1, dest: null, target: null,
+      attackDelay: 0, potionDelay: 0, lastAttack: -99, base, cur,
+      lit: new Set(), active: new Set(), drainCounter: 0, inv,
+      statTimer: 0, hpTimer: 0, damageTaken: 0, dead: false,
+    },
+    zuk: null, shield: null, setTimer: 72, timerPaused: false, hasPaused: false, enraged: false,
+  };
+
+  // Shield first so it moves before Zuk decides who to shoot each tick.
+  S.shield = makeNpc("shield", 23, 13, { frozen: 1, dir: Math.random() < 0.5 ? 1 : -1, retaliates: false });
+  S.npcs.push(S.shield);
+  S.zuk = makeNpc("zuk", 22, 8, { stunned: 8, attackDelay: 14, retaliates: false });
+  S.npcs.push(S.zuk);
+  S.zuk.aggro = S.player;
+  log("Wave 69: TzKal-Zuk", "hl");
+
+  if (opts.phase === "jad") {
+    S.setTimer = 400; S.zuk.hp = 479; S.timerPaused = true; S.hasPaused = true;
+    zukThresholds();
+  } else if (opts.phase === "healers") {
+    S.setTimer = 400; S.zuk.hp = 239; S.timerPaused = false; S.hasPaused = true;
+    zukThresholds();
+  }
+
+  $("overlay").style.display = "none";
+  renderInv(); renderPrayers(); renderEquip(); renderInfo();
+  restartLoop();
+}
+
+// ---------------------------------------------------------------------------
+// Zuk phases
+// ---------------------------------------------------------------------------
+function spawnSet() {
+  const aggro = S.shield.dead ? S.player : S.shield;
+  S.npcs.push(makeNpc("zek", 20, 21, { age: 7, stunned: 1, aggro }));
+  S.npcs.push(makeNpc("xil", 29, 21, { age: 9, stunned: 1, aggro }));
+  log("A Jal-Zek and Jal-Xil appear.", "hl");
+}
+
+function zukThresholds() {
+  const z = S.zuk;
+  if (!S.timerPaused) {
+    if (z.hp < 600 && !S.hasPaused) {
+      S.timerPaused = true; S.hasPaused = true;
+      log("Set timer paused (Zuk under 600).");
+    }
+  } else if (z.hp < 480) {
+    S.setTimer += 175;
+    S.timerPaused = false;
+    const aggro = S.shield.dead ? S.player : S.shield;
+    S.npcs.push(makeNpc("jad", 24, 25, { age: 7, stunned: 1, aggro, healersLeft: 3, procced: false }));
+    log("JalTok-Jad spawns. Set timer resumes (+175 ticks).", "hl");
+  }
+  if (z.hp < 240 && !S.enraged) {
+    S.enraged = true;
+    z.attackSpeed = 7;
+    for (const hx of [16, 20, 30, 34]) S.npcs.push(makeNpc("mejjak", hx, 9, { age: 2, aggro: z }));
+    log("Zuk enrages! Four Jal-MejJak arrive to heal him.", "bad");
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Player combat numbers
+// ---------------------------------------------------------------------------
+function prayerActive(name) { return S.player.active.has(PRAYER_IDX[name]); }
+
+function playerRangedRolls() {
+  const P = S.player;
+  let accMul = 1, strMul = 1;
+  if (prayerActive("Rigour")) { accMul = 1.2; strMul = 1.23; }
+  else if (prayerActive("Eagle Eye")) { accMul = 1.15; strMul = 1.15; }
+  else if (prayerActive("Hawk Eye")) { accMul = 1.1; strMul = 1.1; }
+  else if (prayerActive("Sharp Eye")) { accMul = 1.05; strMul = 1.05; }
+  // Rapid style: no invisible level bonus.
+  const effAtt = Math.floor(P.cur.ranged * accMul) + 8;
+  const effStr = Math.floor(P.cur.ranged * strMul) + 8;
+  const attRoll = Math.floor(effAtt * (GEAR.a.range + 64) * GEAR.cAcc);
+  const maxHit = Math.floor(Math.floor(0.5 + (effStr * (GEAR.rstr + 64)) / 640) * GEAR.cDmg);
+  return { attRoll, maxHit };
+}
+
+function defPrayerMul() {
+  if (prayerActive("Rigour") || prayerActive("Piety") || prayerActive("Augury")) return 1.25;
+  if (prayerActive("Chivalry")) return 1.2;
+  if (prayerActive("Steel Skin")) return 1.15;
+  if (prayerActive("Rock Skin")) return 1.1;
+  if (prayerActive("Thick Skin")) return 1.05;
+  return 1;
+}
+function magicPrayerMul() {
+  if (prayerActive("Augury")) return 1.25;
+  if (prayerActive("Mystic Might")) return 1.15;
+  if (prayerActive("Mystic Lore")) return 1.1;
+  if (prayerActive("Mystic Will")) return 1.05;
+  return 1;
+}
+function playerDefRoll(style) {
+  const P = S.player;
+  if (style === "magic") {
+    const eff = Math.floor(P.cur.magic * magicPrayerMul() * 0.7) + Math.floor(P.cur.defence * defPrayerMul() * 0.3) + 8;
+    return eff * (GEAR.d.magic + 64);
+  }
+  const eff = Math.floor(P.cur.defence * defPrayerMul()) + 8;
+  return eff * (GEAR.d[style] + 64);
+}
+
+// ---------------------------------------------------------------------------
+// Events / projectiles
+// ---------------------------------------------------------------------------
+function at(tick, fn) { S.events.push({ tick, fn }); }
+
+function addProjectile(from, to, delay, kind) {
+  const fc = center(from);
+  S.projectiles.push({ fx: fc.x, fy: fc.y, to, start: S.tick, end: S.tick + delay, kind });
+}
+
+function splat(target, dmg, kind) {
+  S.splats.push({ target, dmg, kind, tick: S.tick, ox: (S.splats.filter((s) => s.target === target && s.tick === S.tick).length) });
+}
+
+function damageNpc(n, dmg, source) {
+  if (n.dead) return;
+  dmg = Math.min(dmg, n.hp);
+  n.hp -= dmg;
+  n.hpShownUntil = S.tick + 10;
+  splat(n, dmg, dmg > 0 ? "dmg" : "miss");
+  if (source === "player" && n.retaliates && n.aggro !== S.player) {
+    if (n.type === "mejjak") n.attackDelay = Math.max(n.attackDelay, 2);
+    n.aggro = S.player;
+  }
+  if (n.type === "zuk") zukThresholds();
+  if (n.type === "jad" && !n.procced && n.hp < n.maxHp / 2) {
+    n.procced = true;
+    n.retaliates = false;
+    for (let i = 0; i < n.healersLeft; i++) {
+      let hx = n.x, hy = n.y, tries = 0;
+      do {
+        hx = n.x + rnd(6);
+        hy = n.y - rnd(4) - n.size;
+        tries++;
+      } while (tries < 50 && S.npcs.some((m) => !m.dead && m.type !== "shield" && m.type !== "zuk" && overlaps(m, { x: hx, y: hy, size: 1 })));
+      S.npcs.push(makeNpc("hurkot", hx, hy, { stunned: 1, aggro: n, jad: n }));
+    }
+    log("Jad calls three Yt-HurKot healers.", "hl");
+  }
+  if (n.hp <= 0) killNpc(n);
+}
+
+function healNpc(n, amt) {
+  if (n.dead || amt <= 0) return;
+  const before = n.hp;
+  n.hp = Math.min(n.maxHp, n.hp + amt);
+  if (n.hp > before) { splat(n, n.hp - before, "heal"); n.hpShownUntil = S.tick + 10; }
+}
+
+function killNpc(n) {
+  if (n.dead) return;
+  n.dead = true;
+  n.deathTick = S.tick;
+  if (S.player.target === n) S.player.target = null;
+  if (n.type === "zuk") {
+    for (const m of S.npcs) if (m !== n && !m.dead) { m.dead = true; m.deathTick = S.tick; }
+    endGame(true);
+  } else if (n.type === "jad") {
+    for (const m of S.npcs) if (m.type === "hurkot" && !m.dead) { m.dead = true; m.deathTick = S.tick; }
+    log("JalTok-Jad is dead.", "hl");
+  } else if (n.type === "shield") {
+    log("The Ancestral Glyph has been destroyed!", "bad");
+    for (const m of S.npcs) if (!m.dead && m.aggro === n) m.aggro = S.player;
+  }
+}
+
+function damagePlayer(dmg, source, kind) {
+  const P = S.player;
+  if (P.dead || S.over) return;
+  dmg = Math.min(dmg, P.cur.hitpoints);
+  P.cur.hitpoints -= dmg;
+  P.damageTaken += dmg;
+  splat(P, dmg, dmg > 0 ? "dmg" : "miss");
+  if (dmg > 0) play("hit", 0.15);
+  // Ring of suffering (i) recoil.
+  if (dmg > 0 && source && !source.dead && kind !== "spark") {
+    damageNpc(source, Math.floor(dmg / 10) + 1, "recoil");
+  }
+  if (P.cur.hitpoints <= 0) {
+    P.dead = true;
+    endGame(false, source ? source.name : "the Inferno");
+  }
+}
+
+function endGame(win, killer) {
+  if (S.over) return;
+  S.over = win ? "win" : "loss";
+  const t = fmtTime(S.tick);
+  if (win) {
+    log("TzKal-Zuk has been defeated! " + t, "hl");
+    showOverlay("Infernal cape!", "You defeated TzKal-Zuk in " + t + " (" + S.tick + " ticks). Damage taken: " + S.player.damageTaken + ".");
+  } else {
+    log("Oh dear, you are dead! (" + killer + ")", "bad");
+    showOverlay("Oh dear, you are dead!", "Killed by " + killer + " at " + t + ". Zuk had " + S.zuk.hp + " / 1200 hitpoints left.");
+  }
+}
+
+function showOverlay(title, text) {
+  $("ovTitle").textContent = title;
+  $("ovText").textContent = text;
+  $("overlay").style.display = "flex";
+}
+
+// ---------------------------------------------------------------------------
+// NPC behaviour
+// ---------------------------------------------------------------------------
+function npcAttackRoll(n, style) {
+  if (style === "magic") {
+    const b = n.type === "zek" ? 80 : n.type === "jad" ? 100 : 0;
+    return (n.stats.magic + 9) * (b + 64);
+  }
+  if (style === "range") {
+    const b = n.type === "xil" ? 40 : n.type === "jad" ? 80 : 0;
+    return (n.stats.range + 9) * (b + 64);
+  }
+  return (n.stats.attack + 9) * 64;
+}
+
+// Roll an NPC attack into a damage number, honouring protection prayers (checked now).
+function rollNpcHit(n, target, style, maxHit) {
+  if (target === S.shield) {
+    const defRoll = 9 * 64;
+    return Math.random() < hitChance(npcAttackRoll(n, style), defRoll) ? rnd(maxHit + 1) : 0;
+  }
+  const prot = style === "magic" ? "Protect from Magic" : style === "range" ? "Protect from Missiles" : "Protect from Melee";
+  if (prayerActive(prot)) return 0;
+  const defStyle = style === "magic" ? "magic" : style === "range" ? "range" : style;
+  return Math.random() < hitChance(npcAttackRoll(n, style), playerDefRoll(defStyle)) ? rnd(maxHit + 1) : 0;
+}
+
+function landOn(target, n, dmg, kind) {
+  if (target === S.player) damagePlayer(dmg, n, kind);
+  else if (target === S.shield) { if (!S.shield.dead) damageNpc(S.shield, dmg, "npc"); }
+  else damageNpc(target, dmg, "npc");
+}
+
+function npcCanSee(n) {
+  const t = n.aggro;
+  if (!t || t.dead) return false;
+  if (overlaps(n, t)) return false;
+  if (n.type === "hurkot") return inMeleeRange(n, t);
+  return boxDist(n, t) <= n.range;
+}
+
+function npcFootprintFree(n, x, y) {
+  const probe = { x, y, size: n.size };
+  const b = box(probe);
+  if (b.x0 < ARENA.x0 || b.x1 > ARENA.x1 || b.y0 < ARENA.y0 || b.y1 > ARENA.y1) return false;
+  for (const m of S.npcs) {
+    if (m === n || m.dead || m.type === "shield" || m.type === "zuk" || m.type === "mejjak") continue;
+    if (overlaps(probe, m)) return false;
+  }
+  return true;
+}
+
+function npcMove(n) {
+  const t = n.aggro;
+  if (!t || t.dead) return;
+  if (npcCanSee(n)) return;
+  let dx = Math.sign(t.x - n.x), dy = Math.sign(t.y - n.y);
+  if (overlaps(n, t)) {
+    // Standing under the target: shuffle off in a random cardinal direction.
+    if (Math.random() < 0.5) { dy = 0; dx = Math.random() < 0.5 ? 1 : -1; } else { dx = 0; dy = Math.random() < 0.5 ? 1 : -1; }
+  } else if (overlaps({ x: n.x + dx, y: n.y + dy, size: n.size }, t)) {
+    dy = 0;
+  }
+  if ((dx || dy) && npcFootprintFree(n, n.x + dx, n.y + dy)) { n.x += dx; n.y += dy; }
+  else if (dx && npcFootprintFree(n, n.x + dx, n.y)) n.x += dx;
+  else if (dy && npcFootprintFree(n, n.x, n.y + dy)) n.y += dy;
+}
+
+function npcTick(n) {
+  if (n.dead) return;
+  if (n.age > 0) { n.age--; if (n.age > 0) return; }
+  n.px = n.x; n.py = n.y;
+
+  if (n.type === "shield") return shieldTick(n);
+  if (n.type === "zuk") return zukTick(n);
+
+  n.attackDelay--;
+  if (n.type !== "mejjak") npcMove(n);
+  if (n.stunned > 0) { n.stunned--; return; }
+  if (n.type === "hurkot" && n.jad && n.jad.dead) { killNpc(n); return; }
+  if (n.attackDelay > 0) return;
+  const t = n.aggro;
+  if (!t || t.dead) return;
+  if (n.type === "mejjak") return mejjakAttack(n, t);
+  if (!npcCanSee(n)) return;
+
+  const d = boxDist(n, t);
+  if (n.type === "zek" || n.type === "xil") {
+    let style = n.type === "zek" ? "magic" : "range";
+    if (inMeleeRange(n, t) && t === S.player && Math.random() < 0.5) style = n.type === "zek" ? "stab" : "crush";
+    const max = style === "magic" ? 70 : style === "range" ? 46 : n.type === "zek" ? 52 : 19;
+    const dmg = rollNpcHit(n, t, style, max);
+    let delay = 1;
+    if (style === "magic") delay = 1 + Math.floor((1 + d) / 3);
+    else if (style === "range") delay = 1 + Math.floor((3 + d) / 6) + 2;
+    if (style === "magic" || style === "range") { addProjectile(n, t, delay, n.type); play("zekXil", 0.12); }
+    n.anim = style; n.animTick = S.tick;
+    at(S.tick + delay, () => landOn(t, n, dmg));
+    n.attackDelay = n.attackSpeed;
+  } else if (n.type === "jad") {
+    let style = Math.random() < 0.5 ? "range" : "magic";
+    if (inMeleeRange(n, t) && t === S.player && Math.random() < 0.5) style = "stab";
+    n.anim = style; n.animTick = S.tick; n.lastStyle = style;
+    if (style === "stab") {
+      const dmg = rollNpcHit(n, t, "stab", 113);
+      at(S.tick + 1, () => landOn(t, n, dmg));
+    } else {
+      if (style === "magic") play("jadMage", 0.2);
+      // Prayer is checked 3 ticks after the animation starts, then the projectile flies.
+      at(S.tick + 3, () => {
+        if (n.dead || !t || t.dead) return;
+        const dd = boxDist(n, t);
+        const full = style === "magic" ? 1 + Math.floor((1 + dd) / 3) : 1 + Math.floor((3 + dd) / 6);
+        const rest = Math.max(0, full - 3);
+        const dmg = rollNpcHit(n, t, style, 113);
+        addProjectile(n, t, Math.max(1, rest), "jad" + style);
+        play(style === "magic" ? "jadMageFire" : "jadRange", 0.2);
+        if (rest === 0) landOn(t, n, dmg);
+        else at(S.tick + rest, () => landOn(t, n, dmg));
+      });
+    }
+    n.attackDelay = n.attackSpeed;
+  } else if (n.type === "hurkot") {
+    if (t === n.jad) {
+      const amt = rnd(20);
+      addProjectile(n, t, 3, "heal");
+      at(S.tick + 3, () => healNpc(n.jad, amt));
+    } else {
+      const dmg = rollNpcHit(n, t, "crush", 14);
+      at(S.tick + 1, () => landOn(t, n, dmg));
+    }
+    n.anim = "attack"; n.animTick = S.tick;
+    n.attackDelay = n.attackSpeed;
+  }
+}
+
+function mejjakAttack(n, t) {
+  n.anim = "attack"; n.animTick = S.tick;
+  n.attackDelay = n.attackSpeed;
+  if (t === S.zuk) {
+    const amt = rnd(25);
+    addProjectile(n, t, 3, "heal");
+    at(S.tick + 3, () => healNpc(S.zuk, amt));
+    return;
+  }
+  // Area attack: one spark on the player's column (clamped to the healer's reach) and two random.
+  const P = S.player;
+  const spots = [
+    { x: Math.min(Math.max(n.x - 5, P.x), n.x + 4), y: P.y },
+    { x: n.x + rnd(11) - 5, y: 14 + rnd(4) },
+    { x: n.x + rnd(11) - 5, y: 14 + rnd(4) },
+  ];
+  for (const s of spots) {
+    S.projectiles.push({ fx: n.x + 0.5, fy: n.y + 0.5, to: { x: s.x, y: s.y, size: 1 }, start: S.tick, end: S.tick + 3, kind: "spark" });
+    at(S.tick + 3, () => {
+      S.sparks.push({ x: s.x, y: s.y, tick: S.tick });
+      play("spark", 0.08);
+      const p = S.player;
+      if (Math.abs(p.x - s.x) <= 1 && Math.abs(p.y - s.y) <= 1) damagePlayer(5 + rnd(6), n, "spark");
+    });
+  }
+}
+
+function shieldTick(n) {
+  if (n.frozen <= 0) {
+    n.x += n.dir;
+    if (n.x < 11 || n.x > 35) { n.frozen = 5; n.dir = -n.dir; }
+  }
+  n.frozen--;
+}
+
+function zukTick(z) {
+  if (!S.timerPaused) {
+    S.setTimer--;
+    if (S.setTimer === 0) { S.setTimer = 350; spawnSet(); }
+  }
+  z.attackDelay--;
+  if (z.stunned > 0) { z.stunned--; return; }
+  if (z.attackDelay > 0) return;
+  const P = S.player;
+  const sh = S.shield;
+  let target = sh;
+  if (sh.dead || P.x < sh.x || P.x >= sh.x + 5 || P.y > SAFE_MAX_Y) target = P;
+  z.anim = "attack"; z.animTick = S.tick;
+  addProjectile(z, target, 4, "zuk");
+  play("zuk", target === P ? 0.3 : 0.08);
+  if (target === P) {
+    // Typeless: prayer does nothing, accuracy rolls against magic defence.
+    const att = (150 + 9) * (550 + 64);
+    const dmg = Math.random() < hitChance(att, playerDefRoll("magic")) ? rnd(149) : 0;
+    at(S.tick + 4, () => damagePlayer(dmg, z, "zuk"));
+  }
+  z.attackDelay = z.attackSpeed;
+}
+
+// ---------------------------------------------------------------------------
+// Player
+// ---------------------------------------------------------------------------
+function clampToArena(x, y) {
+  return { x: Math.max(ARENA.x0, Math.min(ARENA.x1, x)), y: Math.max(ARENA.y0, Math.min(ARENA.y1, y)) };
+}
+
+// One step of OSRS style open ground pathing: diagonal first, then straight.
+function stepToward(P, tx, ty) {
+  const dx = Math.sign(tx - P.x), dy = Math.sign(ty - P.y);
+  const c = clampToArena(P.x + dx, P.y + dy);
+  P.x = c.x; P.y = c.y;
+}
+
+// Closest tile from which the player can shoot the target.
+function attackTile(P, t) {
+  const b = box(t);
+  let best = null, bestD = 1e9;
+  for (let x = ARENA.x0; x <= ARENA.x1; x++) {
+    for (let y = ARENA.y0; y <= ARENA.y1; y++) {
+      const d = boxDist({ x, y, size: 1 }, t);
+      if (d < 1 || d > BOWFA_RANGE) continue;
+      if (x >= b.x0 && x <= b.x1 && y >= b.y0 && y <= b.y1) continue;
+      const walk = Math.max(Math.abs(x - P.x), Math.abs(y - P.y));
+      if (walk < bestD) { bestD = walk; best = { x, y }; }
+    }
+  }
+  return best;
+}
+
+function playerCanShoot(P, t) {
+  if (!t || t.dead || t.age > 0) return false;
+  const d = boxDist(P, t);
+  return d >= 1 && d <= BOWFA_RANGE && !overlaps(P, t);
+}
+
+function playerTick() {
+  const P = S.player;
+  if (P.dead) return;
+  P.px = P.x; P.py = P.y;
+  P.attackDelay--;
+  P.potionDelay--;
+  if (P.target && (P.target.dead)) P.target = null;
+
+  if (P.target) {
+    const t = P.target;
+    for (let step = 0; step < 2 && !playerCanShoot(P, t); step++) {
+      const dest = attackTile(P, t);
+      if (!dest) break;
+      stepToward(P, dest.x, dest.y);
+    }
+    if (playerCanShoot(P, t) && P.attackDelay <= 0) playerAttack(t);
+  } else if (P.dest) {
+    for (let step = 0; step < 2; step++) {
+      if (P.x === P.dest.x && P.y === P.dest.y) { P.dest = null; break; }
+      stepToward(P, P.dest.x, P.dest.y);
+    }
+    if (P.dest && P.x === P.dest.x && P.y === P.dest.y) P.dest = null;
+  }
+}
+
+function playerAttack(t) {
+  const P = S.player;
+  const { attRoll, maxHit } = playerRangedRolls();
+  const defRoll = (t.stats.def + 9) * (t.defBonus.range + 64);
+  const dmg = Math.random() < hitChance(attRoll, defRoll) ? rnd(maxHit + 1) : 0;
+  const d = boxDist(P, t);
+  const delay = 1 + Math.floor((3 + d) / 6);
+  addProjectile(P, t, delay, "arrow");
+  play("bow", 0.15);
+  P.lastAttack = S.tick;
+  P.attackDelay = BOWFA_SPEED;
+  at(S.tick + delay, () => { if (!t.dead) damageNpc(t, dmg, "player"); });
+}
+
+function updatePrayers() {
+  const P = S.player;
+  if (P.cur.prayer <= 0) P.lit.clear();
+  P.active = new Set(P.lit);
+  let drain = 0;
+  for (const i of P.active) drain += PRAYERS[i].drain;
+  const resist = 60 + 2 * GEAR.pray;
+  P.drainCounter += drain;
+  while (P.drainCounter > resist) { P.cur.prayer--; P.drainCounter -= resist; }
+  if (P.cur.prayer <= 0) {
+    P.cur.prayer = 0;
+    if (P.lit.size) log("You have run out of prayer points.", "bad");
+    P.lit.clear(); P.active.clear();
+  }
+}
+
+// Boosts fade and drains recover one level per minute (100 ticks); HP the same.
+function statTimers() {
+  const P = S.player;
+  P.statTimer++;
+  if (P.statTimer >= 100) {
+    P.statTimer = 0;
+    for (const k of ["attack", "strength", "defence", "ranged", "magic"]) {
+      if (P.cur[k] > P.base[k]) P.cur[k]--;
+      else if (P.cur[k] < P.base[k]) P.cur[k]++;
+    }
+    if (P.cur.hitpoints > P.base.hitpoints) P.cur.hitpoints--;
+    else if (P.cur.hitpoints < P.base.hitpoints) P.cur.hitpoints++;
+  }
+}
+
+function drink(slot) {
+  const P = S.player;
+  const it = P.inv[slot];
+  if (!it || P.dead) return;
+  if (P.potionDelay > 0) return;
+  const B = P.base, C = P.cur;
+  if (it.id === "brew") {
+    const hpBoost = Math.floor(B.hitpoints * 0.15) + 2;
+    C.hitpoints = Math.min(C.hitpoints + hpBoost, B.hitpoints + hpBoost);
+    const defBoost = Math.floor(B.defence * 0.2) + 2;
+    C.defence = Math.min(C.defence + defBoost, B.defence + defBoost);
+    for (const k of ["attack", "strength", "ranged", "magic"]) C[k] = Math.max(0, C[k] - (Math.floor(C[k] * 0.1) + 2));
+  } else if (it.id === "restore") {
+    for (const k of ["attack", "strength", "defence", "ranged", "magic", "prayer"]) {
+      if (C[k] < B[k]) C[k] = Math.min(B[k], C[k] + Math.floor(B[k] * 0.25) + 8);
+    }
+  } else if (it.id === "bastion") {
+    C.ranged = Math.max(C.ranged, B.ranged + Math.floor(B.ranged * 0.1) + 4);
+    C.defence = Math.max(C.defence, B.defence + Math.floor(B.defence * 0.15) + 5);
+  }
+  it.doses--;
+  if (it.doses <= 0) P.inv[slot] = null;
+  P.potionDelay = 3;
+  play("drink", 0.15);
+}
+
+// ---------------------------------------------------------------------------
+// Tick loop
+// ---------------------------------------------------------------------------
+let tickTimer = null;
+let lastTickAt = performance.now();
+
+function restartLoop() {
+  if (tickTimer) clearInterval(tickTimer);
+  tickTimer = setInterval(gameTick, opts.speed);
+  lastTickAt = performance.now();
+}
+
+function gameTick() {
+  if (!S || S.over || S.paused) { lastTickAt = performance.now(); return; }
+  lastTickAt = performance.now();
+  S.tick++;
+
+  // Inputs clicked since the last tick are processed now, like the real client.
+  const inputs = S.inputs; S.inputs = [];
+  for (const fn of inputs) fn();
+
+  updatePrayers();
+  for (const n of S.npcs.slice()) { if (S.over) break; npcTick(n); }
+  if (!S.over) playerTick();
+
+  const due = S.events.filter((e) => e.tick <= S.tick);
+  S.events = S.events.filter((e) => e.tick > S.tick);
+  for (const e of due) { if (S.over) break; e.fn(); }
+
+  if (!S.over) statTimers();
+
+  S.npcs = S.npcs.filter((n) => !n.dead || S.tick - n.deathTick < 3);
+  S.projectiles = S.projectiles.filter((p) => p.end >= S.tick);
+  S.splats = S.splats.filter((s) => S.tick - s.tick < 2);
+  S.sparks = S.sparks.filter((s) => S.tick - s.tick < 2);
+
+  renderInv(); renderPrayers(); renderInfo();
+}
+
+// ---------------------------------------------------------------------------
+// Rendering
+// ---------------------------------------------------------------------------
+const canvas = $("game");
+const ctx = canvas.getContext("2d");
+let T = 16; // tile size in CSS px
+let dpr = 1;
+
+function resize() {
+  const stage = $("stage");
+  const w = stage.clientWidth, h = stage.clientHeight;
+  const cols = VIEW.x1 - VIEW.x0 + 1, rows = VIEW.y1 - VIEW.y0 + 1;
+  T = Math.max(6, Math.floor(Math.min(w / cols, h / rows)));
+  dpr = window.devicePixelRatio || 1;
+  canvas.style.width = cols * T + "px";
+  canvas.style.height = rows * T + "px";
+  canvas.width = Math.floor(cols * T * dpr);
+  canvas.height = Math.floor(rows * T * dpr);
+}
+window.addEventListener("resize", resize);
+
+const sx = (x) => (x - VIEW.x0) * T;
+const sy = (y) => (y - VIEW.y0) * T;
+
+function lerp(a, b, t) { return a + (b - a) * t; }
+
+function drawFloor() {
+  ctx.fillStyle = "#0b0605";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  // Zuk's ledge
+  ctx.fillStyle = "#1c0f0a";
+  ctx.fillRect(sx(ARENA.x0), sy(0), (ARENA.x1 - ARENA.x0 + 1) * T, 14 * T);
+  // Lava glow behind Zuk
+  const g = ctx.createRadialGradient(sx(25.5), sy(4), T, sx(25.5), sy(4), 14 * T);
+  g.addColorStop(0, "rgba(255,90,20,0.35)");
+  g.addColorStop(1, "rgba(255,90,20,0)");
+  ctx.fillStyle = g;
+  ctx.fillRect(sx(VIEW.x0), sy(0), (VIEW.x1 - VIEW.x0 + 1) * T, 16 * T);
+  // Walkable floor
+  for (let x = ARENA.x0; x <= ARENA.x1; x++) {
+    for (let y = ARENA.y0; y <= ARENA.y1; y++) {
+      const v = ((x * 7 + y * 13) % 5);
+      ctx.fillStyle = ["#2a1a13", "#2d1c14", "#281811", "#2f1d15", "#2b1a12"][v];
+      ctx.fillRect(sx(x), sy(y), T, T);
+    }
+  }
+  ctx.strokeStyle = "rgba(0,0,0,0.25)";
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  for (let x = ARENA.x0; x <= ARENA.x1 + 1; x++) { ctx.moveTo(sx(x) + 0.5, sy(ARENA.y0)); ctx.lineTo(sx(x) + 0.5, sy(ARENA.y1 + 1)); }
+  for (let y = ARENA.y0; y <= ARENA.y1 + 1; y++) { ctx.moveTo(sx(ARENA.x0), sy(y) + 0.5); ctx.lineTo(sx(ARENA.x1 + 1), sy(y) + 0.5); }
+  ctx.stroke();
+  // Pillars either side of Zuk
+  ctx.fillStyle = "#3b2a22";
+  for (const wx of [21, 29]) ctx.fillRect(sx(wx), sy(0), T, 9 * T);
+  // Safe row markers used by most players (from InfernoTrainer's tile markers)
+  const marks = [[14, "#00ff00"], [16, "#ff0000"], [17, "#ff0000"], [18, "#ff0000"], [20, "#00ff00"], [30, "#00ff00"], [32, "#ff0000"], [33, "#ff0000"], [34, "#ff0000"], [36, "#00ff00"]];
+  for (const [mx, col] of marks) { ctx.strokeStyle = col; ctx.lineWidth = Math.max(1, T / 10); ctx.strokeRect(sx(mx) + 1, sy(14) + 1, T - 2, T - 2); }
+}
+
+function drawSprite(key, n, x, y, scale = 1) {
+  const w = n.size * T * scale;
+  const img = images[key];
+  if (imgOk(key)) {
+    const h = w * (img.naturalHeight / img.naturalWidth);
+    const cx = sx(x + n.size / 2);
+    const by = sy(y + 1);
+    ctx.drawImage(img, cx - w / 2, by - h, w, h);
+    return true;
+  }
+  return false;
+}
+
+function drawNpc(n, tp) {
+  if (n.age > 0) return;
+  const x = lerp(n.px, n.x, tp), y = lerp(n.py, n.y, tp);
+  const left = sx(x), top = sy(y - n.size + 1), w = n.size * T;
+  ctx.save();
+  if (n.dead) ctx.globalAlpha = Math.max(0, 1 - (S.tick - n.deathTick + tp) / 3);
+
+  if (n.type === "shield") {
+    const cx = left + w / 2, cy = top + w / 2;
+    const pulse = 0.85 + 0.15 * Math.sin(performance.now() / 300);
+    ctx.fillStyle = "rgba(255,115,0," + (0.25 * pulse) + ")";
+    ctx.fillRect(left, top, w, w);
+    ctx.strokeStyle = "#ff7300";
+    ctx.lineWidth = Math.max(2, T / 6);
+    ctx.beginPath(); ctx.arc(cx, cy, w * 0.42, 0, Math.PI * 2); ctx.stroke();
+    ctx.beginPath(); ctx.arc(cx, cy, w * 0.22, 0, Math.PI * 2); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(cx, cy - w * 0.42); ctx.lineTo(cx, cy + w * 0.42); ctx.moveTo(cx - w * 0.42, cy); ctx.lineTo(cx + w * 0.42, cy); ctx.stroke();
+  } else {
+    ctx.fillStyle = "rgba(0,0,0,0.25)";
+    ctx.fillRect(left, top, w, w);
+    let drawn = false;
+    const since = S.tick - n.animTick + tp;
+    if (n.type === "jad") {
+      let frames = null;
+      if (n.anim === "magic" && since < JAD_MAGE_FRAMES.length / JAD_FRAMES_PER_TICK) frames = JAD_MAGE_FRAMES;
+      if (n.anim === "range" && since < JAD_RANGE_FRAMES.length / JAD_FRAMES_PER_TICK) frames = JAD_RANGE_FRAMES;
+      const f = frames ? frames[Math.min(frames.length - 1, Math.floor(since * JAD_FRAMES_PER_TICK))] : JAD_MAGE_FRAMES[0];
+      if (f && f.ok) {
+        const iw = w * 1.15, ih = iw * (f.naturalHeight / f.naturalWidth);
+        ctx.drawImage(f, left + w / 2 - iw / 2, top + w - ih, iw, ih);
+        drawn = true;
+      }
+      if (opts.jadLabel || !drawn) {
+        if (since < 3 && (n.anim === "magic" || n.anim === "range")) {
+          ctx.fillStyle = n.anim === "magic" ? "#3fa9ff" : "#4cff4c";
+          ctx.font = Math.max(10, T * 0.9) + "px RuneScape, sans-serif";
+          ctx.textAlign = "center";
+          ctx.fillText(n.anim === "magic" ? "MAGE" : "RANGE", left + w / 2, top - T * 0.3);
+        }
+      }
+    } else {
+      const lift = n.type === "zuk" && since < 1 ? Math.sin(since * Math.PI) * T * 0.3 : 0;
+      ctx.translate(0, -lift);
+      const scale = n.type === "mejjak" || n.type === "hurkot" ? 1.8 : 1.1;
+      drawn = drawSprite(n.type, n, x, y, scale);
+      ctx.translate(0, lift);
+    }
+    if (!drawn) {
+      const col = { zuk: "#c2410c", zek: "#7c3aed", xil: "#16a34a", jad: "#b45309", hurkot: "#65a30d", mejjak: "#dc2626" }[n.type];
+      ctx.fillStyle = col;
+      ctx.fillRect(left + 2, top + 2, w - 4, w - 4);
+      ctx.fillStyle = "#fff";
+      ctx.font = Math.max(9, Math.min(T * 0.8, 14)) + "px RuneScape, sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText(n.name.replace("Jal-", "").replace("JalTok-", "").replace("TzKal-", "").replace("Yt-", ""), left + w / 2, top + w / 2 + 4);
+    }
+    // Hit points bar
+    if (n.type === "zuk" || n.hpShownUntil > S.tick || n.hp < n.maxHp) {
+      const bw = Math.max(T * 1.2, Math.min(w, T * 3));
+      const bx = left + w / 2 - bw / 2, by = top - T * 0.45;
+      ctx.fillStyle = "#c00";
+      ctx.fillRect(bx, by, bw, Math.max(3, T * 0.25));
+      ctx.fillStyle = "#0c0";
+      ctx.fillRect(bx, by, bw * (n.hp / n.maxHp), Math.max(3, T * 0.25));
+    }
+    if (S.player.target === n) {
+      ctx.strokeStyle = "rgba(255,255,0,0.7)";
+      ctx.lineWidth = 1;
+      ctx.strokeRect(left + 0.5, top + 0.5, w - 1, w - 1);
+    }
+  }
+  ctx.restore();
+}
+
+function drawPlayer(tp) {
+  const P = S.player;
+  const x = lerp(P.px, P.x, tp), y = lerp(P.py, P.y, tp);
+  const cx = sx(x + 0.5), cy = sy(y + 0.5);
+  if (opts.trueTile) {
+    ctx.strokeStyle = "rgba(0,255,255,0.8)";
+    ctx.lineWidth = 1;
+    ctx.strokeRect(sx(P.x) + 0.5, sy(P.y) + 0.5, T - 1, T - 1);
+  }
+  if (P.dest) {
+    ctx.strokeStyle = "rgba(255,255,255,0.35)";
+    ctx.strokeRect(sx(P.dest.x) + 0.5, sy(P.dest.y) + 0.5, T - 1, T - 1);
+  }
+  // Body
+  ctx.fillStyle = P.dead ? "#555" : "#c9e7ff";
+  ctx.beginPath(); ctx.arc(cx, cy, T * 0.38, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = "#0e3b52"; ctx.lineWidth = Math.max(1, T / 10); ctx.stroke();
+  // Bow string flash on attack
+  if (S.tick - P.lastAttack < 1) {
+    ctx.strokeStyle = "#7fffd4";
+    ctx.beginPath(); ctx.arc(cx, cy, T * 0.55, -Math.PI / 2 - 0.8, -Math.PI / 2 + 0.8); ctx.stroke();
+  }
+  // Overhead
+  let over = null;
+  if (P.active.has(PRAYER_IDX["Protect from Magic"])) over = "overMage";
+  else if (P.active.has(PRAYER_IDX["Protect from Missiles"])) over = "overRange";
+  else if (P.active.has(PRAYER_IDX["Protect from Melee"])) over = "overMelee";
+  if (over) {
+    const s = T * 1.3;
+    if (imgOk(over)) ctx.drawImage(images[over], cx - s / 2, cy - T * 0.5 - s, s, s);
+    else {
+      ctx.fillStyle = over === "overMage" ? "#3fa9ff" : over === "overRange" ? "#4cff4c" : "#ff4c4c";
+      ctx.beginPath(); ctx.arc(cx, cy - T * 1.1, T * 0.35, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+}
+
+function projectileEnd(p, tp) {
+  const t = p.to;
+  if (t === S.player) return { x: lerp(t.px, t.x, tp) + 0.5, y: lerp(t.py, t.y, tp) + 0.5 };
+  return center(t);
+}
+
+function drawProjectiles(tp) {
+  for (const p of S.projectiles) {
+    const dur = Math.max(1, p.end - p.start);
+    const prog = (S.tick - p.start + tp) / dur;
+    if (prog < 0 || prog > 1) continue;
+    const e = projectileEnd(p, tp);
+    let x = lerp(p.fx, e.x, prog), y = lerp(p.fy, e.y, prog);
+    const arc = (p.kind === "spark" || p.kind === "heal") ? Math.sin(prog * Math.PI) * 3 : 0;
+    y -= arc;
+    const px = sx(x), py = sy(y);
+    if (p.kind === "zuk") {
+      const s = T * 2;
+      if (imgOk("zukball")) ctx.drawImage(images.zukball, px - s / 2, py - s / 2, s, s);
+      else { ctx.fillStyle = "#ffaa00"; ctx.beginPath(); ctx.arc(px, py, T * 0.8, 0, Math.PI * 2); ctx.fill(); }
+      continue;
+    }
+    const style = {
+      arrow: ["#e8fff6", 0.18], zek: ["#5aa9ff", 0.4], xil: ["#7dff6a", 0.3],
+      jadmagic: ["#ff8c1a", 0.7], jadrange: ["#c8a27a", 0.6], heal: ["#7cff9b", 0.25], spark: ["#ff3b1f", 0.3],
+    }[p.kind] || ["#fff", 0.2];
+    ctx.fillStyle = style[0];
+    ctx.beginPath(); ctx.arc(px, py, T * style[1], 0, Math.PI * 2); ctx.fill();
+  }
+  for (const s of S.sparks) {
+    const a = 1 - (S.tick - s.tick + tp) / 2;
+    ctx.fillStyle = "rgba(255,60,20," + (0.45 * a) + ")";
+    ctx.fillRect(sx(s.x - 1), sy(s.y - 1), 3 * T, 3 * T);
+  }
+}
+
+function drawSplats(tp) {
+  for (const s of S.splats) {
+    const t = s.target;
+    let cx, cy;
+    if (t === S.player) { cx = sx(lerp(t.px, t.x, tp) + 0.5); cy = sy(lerp(t.py, t.y, tp) + 0.5); }
+    else { const c = center(t); cx = sx(c.x); cy = sy(c.y); }
+    const size = Math.max(16, T * 1.2);
+    cx += (s.ox % 2 ? 1 : -1) * (s.ox ? size * 0.5 : 0);
+    cy -= Math.floor(s.ox / 2) * size * 0.6;
+    const key = s.kind === "heal" ? "splatHeal" : s.kind === "miss" ? "splatMiss" : "splatDmg";
+    if (imgOk(key)) ctx.drawImage(images[key], cx - size / 2, cy - size / 2, size, size);
+    else {
+      ctx.fillStyle = s.kind === "heal" ? "#3a7d3a" : s.kind === "miss" ? "#2b5aa8" : "#b01010";
+      ctx.beginPath(); ctx.arc(cx, cy, size / 2, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.fillStyle = "#fff";
+    ctx.font = Math.max(11, size * 0.6) + "px RuneScape, sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.strokeStyle = "#000"; ctx.lineWidth = 2;
+    ctx.strokeText(String(s.dmg), cx, cy + 1);
+    ctx.fillText(String(s.dmg), cx, cy + 1);
+    ctx.textBaseline = "alphabetic";
+  }
+}
+
+function drawClicks() {
+  const now = performance.now();
+  S.clicks = S.clicks.filter((c) => now - c.at < 400);
+  for (const c of S.clicks) {
+    const k = (now - c.at) / 400;
+    const r = T * 0.35 * (1 - k * 0.5);
+    ctx.strokeStyle = c.red ? "#ff2020" : "#ffff00";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(c.x - r, c.y - r); ctx.lineTo(c.x + r, c.y + r);
+    ctx.moveTo(c.x + r, c.y - r); ctx.lineTo(c.x - r, c.y + r);
+    ctx.stroke();
+  }
+}
+
+function drawHud() {
+  ctx.textAlign = "left";
+  ctx.font = Math.max(12, Math.min(18, T)) + "px RuneScape, sans-serif";
+  ctx.fillStyle = "#ffff00";
+  ctx.strokeStyle = "#000"; ctx.lineWidth = 3;
+  const z = S.zuk;
+  const line1 = "TzKal-Zuk " + z.hp + " / 1200";
+  ctx.strokeText(line1, 6, 18); ctx.fillText(line1, 6, 18);
+  ctx.fillStyle = "#fff";
+  const line2 = fmtTime(S.tick) + "  (tick " + S.tick + ")";
+  ctx.strokeText(line2, 6, 38); ctx.fillText(line2, 6, 38);
+  if (opts.timer) {
+    const txt = "Next set: " + (S.timerPaused ? "paused (" + S.setTimer + ")" : S.setTimer + "t / " + (S.setTimer * 0.6).toFixed(1) + "s");
+    ctx.fillStyle = "#ff981f";
+    ctx.strokeText(txt, 6, 58); ctx.fillText(txt, 6, 58);
+  }
+  if (S.paused) {
+    ctx.textAlign = "center";
+    ctx.fillStyle = "#fff";
+    ctx.strokeText("PAUSED", canvas.width / dpr / 2, sy(30)); ctx.fillText("PAUSED", canvas.width / dpr / 2, sy(30));
+  }
+}
+
+function render() {
+  requestAnimationFrame(render);
+  if (!S) return;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const tp = S.paused || S.over ? 1 : Math.min(1, (performance.now() - lastTickAt) / opts.speed);
+  drawFloor();
+  if (opts.safe && !S.shield.dead) {
+    ctx.fillStyle = "rgba(0,255,0,0.18)";
+    const shx = lerp(S.shield.px, S.shield.x, tp);
+    ctx.fillRect(sx(Math.max(ARENA.x0, shx)), sy(ARENA.y0), (Math.min(ARENA.x1 + 1, shx + 5) - Math.max(ARENA.x0, shx)) * T, (SAFE_MAX_Y - ARENA.y0 + 1) * T);
+  }
+  const order = S.npcs.slice().sort((a, b) => (a.type === "zuk" ? -1 : 0) - (b.type === "zuk" ? -1 : 0) || a.y - b.y);
+  for (const n of order) drawNpc(n, tp);
+  drawPlayer(tp);
+  drawProjectiles(tp);
+  drawSplats(tp);
+  drawClicks();
+  drawHud();
+}
+
+// ---------------------------------------------------------------------------
+// Input
+// ---------------------------------------------------------------------------
+function tileAt(ev) {
+  const r = canvas.getBoundingClientRect();
+  const x = Math.floor((ev.clientX - r.left) / T) + VIEW.x0;
+  const y = Math.floor((ev.clientY - r.top) / T) + VIEW.y0;
+  return { x, y, cx: ev.clientX - r.left, cy: ev.clientY - r.top };
+}
+
+function npcAt(x, y) {
+  // Smallest attackable unit under the cursor wins, like left click priority on top of big NPCs.
+  const hits = S.npcs.filter((n) => !n.dead && n.age <= 0 && n.type !== "shield" && overlaps(n, { x, y, size: 1 }));
+  hits.sort((a, b) => a.size - b.size);
+  return hits[0] || null;
+}
+
+canvas.addEventListener("pointerdown", (ev) => {
+  if (!S || S.over) return;
+  ev.preventDefault();
+  const t = tileAt(ev);
+  const n = npcAt(t.x, t.y);
+  S.clicks.push({ x: t.cx, y: t.cy, at: performance.now(), red: !!n });
+  if (n) {
+    S.inputs.push(() => { S.player.target = n; S.player.dest = null; });
+  } else {
+    const c = clampToArena(t.x, t.y);
+    S.inputs.push(() => { S.player.target = null; S.player.dest = c; });
+  }
+});
+canvas.addEventListener("contextmenu", (e) => e.preventDefault());
+
+function togglePrayer(i) {
+  const P = S.player;
+  const p = PRAYERS[i];
+  if (!S || P.dead || P.base.prayer < p.lvl) return;
+  if (P.cur.prayer <= 0) return;
+  if (P.lit.has(i)) { P.lit.delete(i); play("prayOff", 0.1); }
+  else {
+    for (const j of [...P.lit]) if (PRAYERS[j].groups.some((g) => p.groups.includes(g))) P.lit.delete(j);
+    P.lit.add(i);
+    play("prayOn", 0.1);
+  }
+  renderPrayers();
+}
+
+function toggleQuick() {
+  const P = S.player;
+  const quick = QUICK_PRAYERS.map((n) => PRAYER_IDX[n]);
+  const anyOn = quick.some((i) => P.lit.has(i));
+  if (anyOn) { P.lit.clear(); play("prayOff", 0.1); }
+  else { if (P.cur.prayer <= 0) return; P.lit.clear(); for (const i of quick) P.lit.add(i); play("prayOn", 0.1); }
+  renderPrayers();
+}
+
+function setTab(name) {
+  document.querySelectorAll(".tab").forEach((t) => t.classList.toggle("on", t.dataset.tab === name));
+  $("panel-inv").style.display = name === "inv" ? "" : "none";
+  $("panel-pray").style.display = name === "pray" ? "" : "none";
+  $("panel-equip").style.display = name === "equip" ? "" : "none";
+}
+document.querySelectorAll(".tab").forEach((t) => t.addEventListener("click", () => setTab(t.dataset.tab)));
+
+window.addEventListener("keydown", (e) => {
+  if (!S || e.target.tagName === "SELECT") return;
+  const k = e.key.toLowerCase();
+  if (k === "q") togglePrayer(PRAYER_IDX["Protect from Magic"]);
+  else if (k === "w") togglePrayer(PRAYER_IDX["Protect from Missiles"]);
+  else if (k === "e") togglePrayer(PRAYER_IDX["Protect from Melee"]);
+  else if (k === "r") togglePrayer(PRAYER_IDX["Rigour"]);
+  else if (k === " ") { e.preventDefault(); toggleQuick(); }
+  else if (k === "1") setTab("inv");
+  else if (k === "2") setTab("pray");
+  else if (k === "3") setTab("equip");
+  else if (k === "p") togglePause();
+  else return;
+});
+
+function togglePause() {
+  if (!S || S.over) return;
+  S.paused = !S.paused;
+  $("pauseBtn").textContent = S.paused ? "Resume" : "Pause";
+}
+
+$("prayOrb").addEventListener("click", () => toggleQuick());
+$("restartBtn").addEventListener("click", () => newGame());
+$("ovBtn").addEventListener("click", () => newGame());
+$("pauseBtn").addEventListener("click", () => togglePause());
+for (const id of ["optTimer", "optSafe", "optTrue", "optJad", "optSound", "optBoost", "phaseSel"]) $(id).addEventListener("change", readOpts);
+$("optSpeed").addEventListener("change", () => { readOpts(); restartLoop(); });
+
+// ---------------------------------------------------------------------------
+// Side panel DOM
+// ---------------------------------------------------------------------------
+function renderInv() {
+  const el = $("inv");
+  const P = S.player;
+  const key = P.inv.map((it) => (it ? it.id + it.doses : "-")).join(",");
+  if (el.dataset.key === key) return;
+  el.dataset.key = key;
+  el.innerHTML = "";
+  for (let i = 0; i < 28; i++) {
+    const it = P.inv[i];
+    const d = document.createElement("div");
+    d.className = "slot";
+    if (it) {
+      const def = ITEMS[it.id];
+      d.title = def.name + " (" + it.doses + ")";
+      const img = document.createElement("img");
+      img.src = ASSET_ROOT + "assets/images/" + def.img(it.doses);
+      img.alt = "";
+      img.onerror = () => { img.replaceWith(Object.assign(document.createElement("span"), { className: "lbl", textContent: def.short + "(" + it.doses + ")" })); };
+      d.appendChild(img);
+      d.addEventListener("pointerdown", (ev) => { ev.preventDefault(); S.inputs.push(() => { drink(i); renderInv(); }); });
+    }
+    el.appendChild(d);
+  }
+}
+
+function buildPrayerGrid() {
+  const grid = $("prayGrid");
+  grid.innerHTML = "";
+  PRAYERS.forEach((p, i) => {
+    const col = i % 5, row = Math.floor(i / 5);
+    const d = document.createElement("div");
+    d.className = "pray-hit";
+    d.style.left = (10 + (col + 0.5) * 36.8 - 17.5) + "px";
+    d.style.top = (16 + (row + 0.5) * 37 - 17.5) + "px";
+    d.title = p.name;
+    d.dataset.i = i;
+    d.addEventListener("pointerdown", (ev) => { ev.preventDefault(); togglePrayer(i); });
+    grid.appendChild(d);
+  });
+  // Text labels if the prayer book image cannot load.
+  const bg = document.querySelector("#panel-pray .panel-bg");
+  bg.addEventListener("error", () => {
+    PRAYERS.forEach((p, i) => {
+      const col = i % 5, row = Math.floor(i / 5);
+      const l = document.createElement("div");
+      l.className = "pray-fallback";
+      l.style.left = (10 + (col + 0.5) * 36.8 - 17.5) + "px";
+      l.style.top = (16 + (row + 0.5) * 37 - 17.5) + "px";
+      l.textContent = p.name.split(" ").map((w) => w[0]).join("");
+      grid.appendChild(l);
+    });
+  });
+}
+
+function renderPrayers() {
+  const P = S.player;
+  document.querySelectorAll(".pray-hit").forEach((d) => {
+    const i = +d.dataset.i;
+    d.classList.toggle("lit", P.lit.has(i));
+    d.classList.toggle("off", P.base.prayer < PRAYERS[i].lvl);
+  });
+  $("prayPts").textContent = P.cur.prayer + " / " + P.base.prayer;
+  $("prayNum").textContent = P.cur.prayer;
+  $("prayOrb").classList.toggle("active", P.lit.size > 0);
+  const hp = P.cur.hitpoints;
+  $("hpNum").textContent = hp;
+  $("hpNum").style.color = hp > 60 ? "#00ff00" : hp > 30 ? "#ffff00" : "#ff3030";
+  $("prayNum").style.color = P.cur.prayer > 40 ? "#00ff00" : P.cur.prayer > 15 ? "#ffff00" : "#ff3030";
+}
+
+function renderEquip() {
+  const el = $("equip");
+  el.innerHTML = "";
+  for (const e of EQUIPMENT) {
+    const r = document.createElement("div");
+    r.className = "row";
+    const img = document.createElement("img");
+    img.src = ASSET_ROOT + "assets/images/" + e.img;
+    img.alt = "";
+    img.onerror = () => { img.style.visibility = "hidden"; };
+    r.appendChild(img);
+    r.appendChild(document.createTextNode(e.name));
+    el.appendChild(r);
+  }
+  const st = document.createElement("div");
+  st.className = "stats";
+  st.id = "equipStats";
+  el.appendChild(st);
+}
+
+function renderInfo() {
+  const P = S.player, z = S.zuk;
+  const { attRoll, maxHit } = playerRangedRolls();
+  const zDef = (260 + 9) * (100 + 64);
+  const acc = (hitChance(attRoll, zDef) * 100).toFixed(1);
+  const phase = S.enraged ? "Healers / enraged" : S.hasPaused && S.timerPaused ? "Waiting for Jad (under 480)" : S.hasPaused ? "Post Jad" : "Opening";
+  $("info").innerHTML =
+    "<b>Zuk</b> " + z.hp + " / 1200 &nbsp; <b>Shield</b> " + (S.shield.dead ? "gone" : S.shield.hp) + "<br>" +
+    "<b>Phase</b> " + phase + "<br>" +
+    "<b>Ranged</b> " + P.cur.ranged + " &nbsp; <b>Def</b> " + P.cur.defence + "<br>" +
+    "<b>Max hit</b> " + maxHit + " &nbsp; <b>Acc vs Zuk</b> " + acc + "%<br>" +
+    "<b>Damage taken</b> " + P.damageTaken;
+  const es = $("equipStats");
+  if (es) {
+    es.innerHTML = "Ranged att +" + GEAR.a.range + " &nbsp; Str +" + GEAR.rstr + "<br>Mage def +" + GEAR.d.magic + " &nbsp; Range def +" + GEAR.d.range +
+      "<br>Prayer +" + GEAR.pray + " &nbsp; Crystal set: +" + Math.round((GEAR.cAcc - 1) * 100) + "% acc, +" + Math.round((GEAR.cDmg - 1) * 100) + "% dmg";
+  }
+}
+
+function renderLog() {
+  const el = $("log");
+  el.innerHTML = S.log.map((l) => '<div class="' + (l.cls || "") + '">[' + fmtTime(l.t) + "] " + l.msg + "</div>").join("");
+  el.scrollTop = el.scrollHeight;
+}
+
+buildPrayerGrid();
+newGame();
+resize();
+requestAnimationFrame(render);
+</script>
+</body>
+</html>
